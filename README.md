@@ -1,6 +1,4 @@
 # SalinSign: A Filipino Sign Language Recognition System for Doctor-Deaf Interaction Using Long Short-Term Memory (LSTM) Architecture
 
 
-# Subheader
-
 SalinSign is a Filipino Sign Language recognition system specializing for doctor-patient interaction, centering on creating a real-time application optimized for clinical environments. During consultations, it enables deaf patients to communicate with a general practitioner using medical-related FSL gestures, which will be translated into text. The general practitioner will respond by typing messages, which will be displayed as text for the patient to read. This setup eliminates the need for an interpreter—which may be limited or not available at all clinics—ensuring confidentiality and facilitating direct communication between the patient and the general practitioner.
