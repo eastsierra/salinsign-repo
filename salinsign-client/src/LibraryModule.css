@@ -1,0 +1,147 @@
+/* General Layout of the library module*/
+.library-module {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: auto; /* Allow content to expand */
+    min-height: 100vh; /* Ensure height consistency */
+    overflow: hidden; /* Prevent unnecessary clipping */
+    background-color: #f9f9f9;
+    padding: 20px;
+    position: relative;
+  }
+  
+  /* For the back button and image */
+  .back-button {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 70px;
+    height: 70px;
+    cursor: pointer;
+    z-index: 10;
+  }
+  
+  /* For the title image */
+  .header-image {
+    margin-bottom: 100px;
+    width: 80%;
+    max-width: 400px;
+    height: auto;
+  }
+  
+  /* Tab Bar */
+  .tab-bar {
+    display: flex;
+    flex-wrap: nowrap; /* Prevents wrapping */
+    overflow-x: auto; /* Enables horizontal scrolling */
+    width: 100%;
+    background-color: #f1f1f1;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    padding: 5px 0; /* Adds spacing around tabs */
+    scrollbar-width: thin; /* Style scrollbar for modern browsers */
+  }
+  
+  .tab-bar::-webkit-scrollbar {
+    height: 8px; /* Customize scrollbar height */
+  }
+  
+  .tab-bar::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+    border-radius: 4px;
+  }
+  
+  /* Design of the tabs (Curved like) */
+  .tab {
+    flex: 0 0 auto; /* Prevents flexbox shrinking or expanding */
+    padding: 10px 15px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: bold;
+    color: #666;
+    cursor: pointer;
+    background-color: #f1f1f1;
+    border: 1px solid transparent; /* Invisible border for spacing */
+    border-radius: 10px 10px 0 0; /* Top curves */
+    margin: 0 5px; /* Space between tabs */
+    transition: all 0.3s ease;
+  }
+  
+  /* Hover Effect */
+  .tab:hover {
+    background-color: #e0e0e0;
+    border-color: #ccc;
+  }
+  
+  /* Design for the Active Tab */
+  .active-tab {
+    background-color: #007bff; /* Active color */
+    color: #ffffff; /* Active text color */
+    border: 1px solid #007bff; /* Border color for active */
+    border-bottom: 2px solid #f1f1f1; /* Seamlessly blend into tab-bar */
+    z-index: 1; /* Elevate active tab */
+  }
+  
+  /* Tab Content Grid */
+  .tab-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 15px;
+    width: 90%;
+  }
+  
+  .grid-item {
+    text-align: center; /* Ensures horizontal centering for text */
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    transition: transform 0.3s, box-shadow 0.3s;
+  
+    /* Add Flexbox for centering */
+    display: flex;
+    flex-direction: column; /* Stacks children vertically */
+    align-items: center;    /* Centers horizontally */
+    justify-content: center; /* Centers vertically */
+  }
+  
+  .grid-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+  }
+  
+  .grid-image {
+    width: 80px; /* Updated to smaller size */
+    height: 80px; /* Updated to smaller size */
+    object-fit: cover;
+    margin-bottom: 5px; /* Reduce spacing below image */
+    margin-top: 5px;    /* Adjusted for spacing above */
+    border-radius: 8px; /* Slightly reduced radius for compact style */
+  }
+  
+  .grid-title {
+    font-size: 14px; /* Slightly smaller font for grid item titles */
+    font-weight: bold;
+    color: #333;
+    margin-top: 5px;
+  }
+  
+  /* Media Queries for Font Size Adjustments */
+  @media (max-width: 600px) {
+    .tab {
+      font-size: 12px; /* Smaller font size for small screens */
+      padding: 8px 10px; /* Adjust padding */
+    }
+  
+    .grid-image {
+      width: 60px; /* Adjusted for smaller screens */
+      height: 60px; /* Adjusted for smaller screens */
+    }
+  
+    .grid-title {
+      font-size: 12px; /* Smaller title font on small screens */
+    }
+  }
+  
