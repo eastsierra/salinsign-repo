@@ -1,16 +1,95 @@
-.App-button {
-  padding: 10px 20px;
-  font-size: 16px;
-  background-color: #61dafb;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.App-button:hover {
-  background-color: #21a1f1;
-}
-.NewPage {
+.App {
   text-align: center;
-  margin-top: 50px;
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+}
+
+.Background-image {
+  width: 100%;
+  height: 100vh;
+  background-image: url('./images/BackgroundSalins.png');
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+
+.App-logo {
+  width: 85%; 
+  height: 25vh;
+  margin-top: -175px;
+  margin-bottom: 30px; /* space sa pagitan ng first button at logo */
+}
+
+.Button-container {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column; /* columned button */
+  gap: 20px;
+  justify-content: center;
+  align-items: center;
+}
+
+.Menu-button {
+  background-color: #6ba5e4;
+  color: black;
+  border: none;
+  width: 200px; 
+  height: 60px; 
+  font-size: 1.2rem;
+  font-family: 'Calibri', sans-serif; 
+  font-weight: bold; 
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Center text in the button */
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.5); /* button shadows */
+}
+
+.Menu-button:hover {
+  background-color: #21a1f1;
+  transform: scale(1.1);
+  box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.6); /* Enhance shadow on hover */
+}
+
+.Menu-button:active {
+  background-color: #1b82c2;
+  transform: scale(1.05);
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.4); /* Reduce shadow when pressed */
+}
+
+/* image text sa button */
+.Button-icon {
+  width: 150px; 
+  height: 30px;
+}
+
+h1 {
+  font-size: 2.5rem;
+  margin: 0;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+}
+
+p {
+  font-size: 1.2rem;
+  margin: 10px 0 30px;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
 }
