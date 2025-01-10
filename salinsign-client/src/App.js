@@ -1,6 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, useNavigate, Link } from 'react-router-dom';
 import './App.css';
-import LibraryModule from './LibraryModule';
+import LibraryModule from './components/signlibrary/LibraryModule';
+
+import TranslationModule from './components/translation/TranslationModule';
+
 
 const Translate = () => <h2>Translate Module</h2>;
 const SignLibrary = () => <h2>Sign Library Module</h2>;
@@ -41,10 +44,12 @@ function AppWrapper() {
         <Route path="/" element={<MainMenu />} />
         
         {/* Routes for other modules */}
-        <Route path="/translate" element={<Translate />} />
+        <Route path="/translate" element={<TranslationModule />} />
+
         <Route path="/sign-library" element={<SignLibrary />} />
         <Route path="/help" element={<Help />} />
         <Route path="/library-module" element={<LibraryModule />} />
+        
       </Routes>
     </Router>
   );
