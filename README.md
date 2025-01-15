@@ -1,4 +1,4 @@
-# SalinSign: A Filipino Sign Language Recognition System for Doctor-Deaf Interaction Using Long Short-Term Memory (LSTM) Architecture
+![image](https://github.com/user-attachments/assets/2b6aa60e-0f5f-413d-ba7e-a568e4c45a47)# SalinSign: A Filipino Sign Language Recognition System for Doctor-Deaf Interaction Using Long Short-Term Memory (LSTM) Architecture
 
 ## About the Project
 
@@ -9,21 +9,21 @@ SalinSign is a Filipino Sign Language recognition system specializing for doctor
 
 <h3> salinsign_v1 </h3>
 
-
+<br> 
 
 **Windows**
 
-1. Create a virtual environment <br><br>
+1. Inside the `salinsign_v1` Folder, Create a Virtual Environment <br><br>
    ```
    python -m venv salinenv 
    ```
-2. Activate the virtual environment (salinenv) <br><br>
+2. Activate the Virtual Environment (salinenv) <br><br>
    ```
-   env\Scripts\activate
+   salinenv\Scripts\activate
    ```
    or
    ```
-   env\Scripts\activate.bat
+   salinenv\Scripts\activate.bat
    ```
 3. Install Packages 
 * Method 1 - Install Packages from `requirements.txt` <br> 
@@ -40,18 +40,16 @@ SalinSign is a Filipino Sign Language recognition system specializing for doctor
     pip list
     ```
    <br>
-   
+-If the instructions are unclear, refer to this [tutorial](https://youtu.be/Y21OR1OPC9A?si=U4c5jl8k4528wqL5) <br><br>
+
 **Linux**
 
-1. Create a Directory 
+1. Open `salinsign_v1` Directory 
    ```
-   $ mkdir salinenv
-   ``` 
-   ```
-   $ cd salinenv
+   $ cd salinsign_v1
    ```
 
-2. Create and Activate a virtual Environment
+2. Create and Activate a Virtual Environment
    ```
    $ python3 -m venv .salinenv
    ```
@@ -75,3 +73,12 @@ SalinSign is a Filipino Sign Language recognition system specializing for doctor
     ```
     pip list
     ```
+    <br><br>
+
+**Notes**<br><br>
+
+-Make sure the virtual environment folder and the .py files are _inside_ the `salinsign_v1` folder
+<br><br>
+![image](https://github.com/user-attachments/assets/bfb83ae0-a793-4dc9-822c-d64b26f4c015)
+<br><br>
+-When Adding, Commiting, Pushing, **❗❗DO NOT❗❗** include the virtual environment folder `salinenv`
