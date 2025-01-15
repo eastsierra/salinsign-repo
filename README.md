@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/2b6aa60e-0f5f-413d-ba7e-a568e4c45a47)# SalinSign: A Filipino Sign Language Recognition System for Doctor-Deaf Interaction Using Long Short-Term Memory (LSTM) Architecture
+SalinSign: A Filipino Sign Language Recognition System for Doctor-Deaf Interaction Using Long Short-Term Memory (LSTM) Architecture
 
 ## About the Project
 
