@@ -4,10 +4,12 @@
 
 SalinSign is a Filipino Sign Language recognition system specializing for doctor-patient interaction, centering on creating a real-time application optimized for clinical environments. During consultations, it enables deaf patients to communicate with a general practitioner using medical-related FSL gestures, which will be translated into text. The general practitioner will respond by typing messages, which will be displayed as text for the patient to read. This setup eliminates the need for an interpreter—which may be limited or not available at all clinics—ensuring confidentiality and facilitating direct communication between the patient and the general practitioner.
 
-## Getting Started
+## **Getting Started**
 
 
-<h3> salinsign_v1 </h3>
+<h2> salinsign_v1 </h2>
+
+<h3> Setup a Virtual Environment</h3>
 
 <br> 
 
@@ -26,7 +28,7 @@ SalinSign is a Filipino Sign Language recognition system specializing for doctor
    salinenv\Scripts\activate.bat
    ```
 3. Install Packages 
-* Method 1 - Install Packages from `requirements.txt` <br> 
+* Method 1 **(Recommended)** - Install Packages from `requirements.txt` <br> 
     ```
   pip install -r requirements.txt
     ```
@@ -82,3 +84,19 @@ SalinSign is a Filipino Sign Language recognition system specializing for doctor
 ![image](https://github.com/user-attachments/assets/bfb83ae0-a793-4dc9-822c-d64b26f4c015)
 <br><br>
 -When Adding, Commiting, Pushing, **❗❗DO NOT❗❗** include the virtual environment folder `salinenv`
+
+
+<h3> Running salinsign_v1 </h3>
+
+Simply open `salinsign.py`
+
+<h3> Retraining salinsign_v1 </h3>
+
+1. `main.py` to start an entry point for the real-time video processing
+2. `landmarks.py` contains the functions for MediaPipe detection
+3. `extraction.py` to extract keypoints from MediaPipe 
+4. `folder.py` to setup the folder structure for storing keypoint data
+5. `collections.py` data collection
+6. `preprocess.py` to preprocess data and create labels
+7. `lstm.py` to build and train the lstm model
+8. `salinsign.py` to test in real-time
