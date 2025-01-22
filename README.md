@@ -68,7 +68,7 @@ SalinSign is a Filipino Sign Language recognition system specializing for doctor
 
 * Method 2 - Manual Installation of Packages 
   ```
-  pip install tensorflow==2.18.0 opencv-python mediapipe scikit-learn matplotlib
+  pip install tensorflow==2.18.0 opencv-python mediapipe scikit-learn matplotlib flask
   ```
 
 4. Check the installed packages <br><br>
@@ -100,3 +100,5 @@ Simply open `salinsign.py`
 6. `preprocess.py` to preprocess data and create labels
 7. `lstm.py` to build and train the lstm model
 8. `salinsign.py` to test in real-time
+
+
