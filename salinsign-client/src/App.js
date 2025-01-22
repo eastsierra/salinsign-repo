@@ -1,8 +1,9 @@
-import { BrowserRouter as Router, Routes, Route, useNavigate, Link } from 'react-router-dom';
+// src/App.js
+
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
 import LibraryModule from './components/signlibrary/LibraryModule';
-
-import TranslationModule from './components/translation/TranslationModule';
+import TranslationModule from './components/translation/TranslationModule'; // Import TranslationModule
 
 
 const Translate = () => <h2>Translate Module</h2>;
@@ -29,6 +30,7 @@ function MainMenu() {
             <button onClick={() => navigate('/help')} className="Menu-button">
               <img src="HELP.png" alt="Help Icon" className="Button-icon" />
             </button>
+
           </div>
         </div>
       </header>
@@ -44,12 +46,11 @@ function AppWrapper() {
         <Route path="/" element={<MainMenu />} />
         
         {/* Routes for other modules */}
-        <Route path="/translate" element={<TranslationModule />} />
-
+        <Route path="/translate" element={<TranslationModule />} /> {/* Ensure this line exists */}
         <Route path="/sign-library" element={<SignLibrary />} />
         <Route path="/help" element={<Help />} />
         <Route path="/library-module" element={<LibraryModule />} />
-        
+
       </Routes>
     </Router>
   );

@@ -1,7 +1,8 @@
 import React from 'react';
 import './TranslationModule.css';
 import backButtonImage from '../../images/backbutton.png'; // Back Button Image
-import headerImage from '../../images/signlibrary.png'; // Header image for Translation Module
+import headerImage from '../../images/translation.png'; // Header image for Translation Module
+ // Import the VideoStream component
 
 function TranslationModule() {
   return (
@@ -10,13 +11,20 @@ function TranslationModule() {
         src={backButtonImage}
         alt="Back Button"
         className="back-button"
-        onClick={() => window.history.back()} // Navigates back to the previous page
+        onClick={() => window.history.back()} 
       />
       <img src={headerImage} alt="Header" className="header-image" />
       <div className="content-placeholder">
-        <p>Translation module content goes here...</p>
+
+            <img
+                src="http://localhost:5000/video_feed"
+                alt="Video Stream"
+                style={{ width: '100%' }}
+            />
       </div>
     </div>
+
+    
   );
 }
 
