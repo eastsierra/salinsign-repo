@@ -1,0 +1,82 @@
+/* Main container */
+.help-module {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100vh;
+  background-color: #f8f9fa;
+  padding: 20px;
+  position: relative;
+}
+
+/* Back button */
+.back-button {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 50px;
+  height: auto;
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+}
+
+.back-button:hover {
+  transform: scale(1.1);
+}
+
+/* Help title */
+.help-title {
+  font-size: 48px;
+  font-weight: bold;
+  color: #337ab7;
+  text-transform: uppercase;
+  text-shadow: 3px 3px 2px rgba(0, 0, 0, 0.2);
+  margin-bottom: 20px;
+}
+
+/* Content layout */
+.help-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  width: 80%;
+  max-width: 900px;
+}
+
+/* Video container */
+.video-container {
+  width: 320px;
+  height: 200px;
+  background-color: #337ab7;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+.video-player {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+}
+
+/* Text Box */
+.text-box {
+  width: 360px;
+  padding: 15px;
+  border-radius: 10px;
+  border: 4px solid #333;
+  background-color: white;
+  box-shadow: 5px 5px 0px #333, -5px -5px 0px #333;
+  font-size: 16px;
+  color: #333;
+  text-align: justify;
+  font-weight: normal; /* Change from bold to normal */
+  line-height: 1.5;
+}
+

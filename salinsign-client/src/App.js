@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-route
 import './App.css';
 import LibraryModule from './components/signlibrary/LibraryModule';
 import TranslationModule from './components/translation/TranslationModule'; // Import TranslationModule
+import HelpModule from './components/Help/Helpmodule';
 
 
 const Translate = () => <h2>Translate Module</h2>;
@@ -48,7 +49,7 @@ function AppWrapper() {
         {/* Routes for other modules */}
         <Route path="/translate" element={<TranslationModule />} /> {/* Ensure this line exists */}
         <Route path="/sign-library" element={<SignLibrary />} />
-        <Route path="/help" element={<Help />} />
+        <Route path="/help" element={<HelpModule />} />
         <Route path="/library-module" element={<LibraryModule />} />
 
       </Routes>
