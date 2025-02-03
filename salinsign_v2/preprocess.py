@@ -5,8 +5,11 @@ from tensorflow.keras.utils import to_categorical
 
 # Define constants (should align with your project settings)
 DATA_PATH = os.path.join('MP_Data')
-actions = np.array(['hello', 'thanks', 'iloveyou'])
-no_sequences = 30
+actions = np.array(['strong', 'backpain', 'cold',
+    'breathingdifficulty', 'sorethroat', 'cough',
+    'diarrhea', 'dizzy', 'headache', 'heartache',
+    'pain', 'sick', 'vomit'])
+no_sequences = 50
 sequence_length = 30
 
 # Map actions to numerical labels

@@ -5,10 +5,13 @@ import numpy as np
 DATA_PATH = os.path.join('MP_Data')
 
 # Actions that we try to detect
-actions = np.array(['hello', 'thanks', 'iloveyou', 'test'])
+actions = np.array(['strong', 'backpain', 'cold',
+    'breathingdifficulty', 'sorethroat', 'cough',
+    'diarrhea', 'dizzy', 'headache', 'heartache',
+    'pain', 'sick', 'vomit'])
 
 # Number of sequences (videos) to collect per action
-no_sequences = 30
+no_sequences = 50
 
 # Videos are going to be 30 frames in length
 sequence_length = 30

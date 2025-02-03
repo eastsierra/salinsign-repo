@@ -12,13 +12,16 @@ y_train = np.load('y_train.npy')
 y_test = np.load('y_test.npy')
 
 # Constants (should align with other scripts)
-actions = np.array(['hello', 'thanks', 'iloveyou'])
+actions = np.array(['strong', 'backpain', 'cold',
+    'breathingdifficulty', 'sorethroat', 'cough',
+    'diarrhea', 'dizzy', 'headache', 'heartache',
+    'pain', 'sick', 'vomit'])
 log_dir = os.path.join('Logs')
 tb_callback = TensorBoard(log_dir=log_dir)
 
 # Build LSTM Model
 model = Sequential([
-    LSTM(64, return_sequences=True, activation='relu', input_shape=(30, 258)),  # Updated input shape
+    LSTM(64, return_sequences=True, activation='relu', input_shape=(30, 258)),
     LSTM(128, return_sequences=True, activation='relu'),
     LSTM(64, return_sequences=False, activation='relu'),
     Dense(64, activation='relu'),
@@ -30,7 +33,7 @@ model = Sequential([
 model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 
 # Train Model
-history = model.fit(X_train, y_train, epochs=300, callbacks=[tb_callback])
+history = model.fit(X_train, y_train, epochs=80, callbacks=[tb_callback])
 
 # Model Summary
 model.summary()
@@ -38,6 +41,6 @@ model.summary()
 # Save the model to a file
 model.save('action.h5')
 
+# Reload the model for inference if needed
 del model
-
 model = load_model('action.h5')

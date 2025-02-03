@@ -12,7 +12,10 @@ app = Flask(__name__)
 model = load_model('action.h5')
 
 # Actions to detect
-actions = np.array(['hello', 'thanks', 'iloveyou'])
+actions = np.array(['strong', 'backpain', 'cold',
+    'breathingdifficulty', 'sorethroat', 'cough',
+    'diarrhea', 'dizzy', 'headache', 'heartache',
+    'pain', 'sick', 'vomit'])
 
 # Colors for visualization
 colors = [(245, 117, 16), (117, 245, 16), (16, 117, 245)]
