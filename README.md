@@ -1,104 +1,87 @@
-# SalinSign: A Filipino Sign Language Recognition System for Doctor-Deaf Interaction Using Long Short-Term Memory (LSTM) Architecture
+# SalinSign: A Filipino Sign Language Recognition System for Doctor-Deaf Interaction
 
 ## About the Project
 
 SalinSign is a Filipino Sign Language recognition system specializing for doctor-patient interaction, centering on creating a real-time application optimized for clinical environments. During consultations, it enables deaf patients to communicate with a general practitioner using medical-related FSL gestures, which will be translated into text. The general practitioner will respond by typing messages, which will be displayed as text for the patient to read. This setup eliminates the need for an interpreter—which may be limited or not available at all clinics—ensuring confidentiality and facilitating direct communication between the patient and the general practitioner.
 
-## **Getting Started**
 
+## Features
 
-<h2> salinsign_v1 </h2>
+- **Real-time Sign Language Detection**: Recognizes 53 signs including:
+  - Medical signs (Pain, Sick, Headache, Fever, etc.)
+  - Alphabet letters (A-Z)
+- **Advanced Feature Extraction**: 84 hand features extracted for accurate recognition
+- **Optimized Performance**: Configurable for different computer specifications
 
-<h3> Setup a Virtual Environment</h3>
+## Project Components
 
-<br> 
+- **inference_classifier.py**: Main application for real-time sign language detection
+- **create_dataset.py**: Processes collected images to extract hand features
+- **train_classifier.py**: Trains the machine learning model
+- **collect_imgs.py**: Tool for collecting training data
 
-**Windows**
+## Installation
 
-1. Inside the `salinsign_v1` Folder, Create a Virtual Environment <br><br>
+1. Clone this repository:
    ```
-   python -m venv salinenv 
-   ```
-2. Activate the Virtual Environment (salinenv) <br><br>
-   ```
-   salinenv\Scripts\activate
-   ```
-   or
-   ```
-   salinenv\Scripts\activate.bat
-   ```
-3. Install Packages 
-* Method 1 **(Recommended)** - Install Packages from `requirements.txt` <br> 
-    ```
-  pip install -r requirements.txt
-    ```
-
-* Method 2 - Manual Installation of Packages <br>
-    ```
-    pip install tensorflow==2.18.0 opencv-python mediapipe scikit-learn matplotlib
-    ```
-4. Check the installed Packages <br><br>
-    ```
-    pip list
-    ```
-   <br>
--If the instructions are unclear, refer to this [tutorial](https://youtu.be/Y21OR1OPC9A?si=U4c5jl8k4528wqL5) <br><br>
-
-**Linux**
-
-1. Open `salinsign_v1` Directory 
-   ```
-   $ cd salinsign_v1
+   git clone https://github.com/yourusername/medical-sign-interpreter.git
+   cd medical-sign-interpreter
    ```
 
-2. Create and Activate a Virtual Environment
+2. Install required packages:
    ```
-   $ python3 -m venv .salinenv
+   pip install -r requirements.txt
    ```
-  
+
+3. Run the application:
    ```
-   $ source .salinenv/bin/activate
+   python inference_classifier.py
    ```
-   
-3. Install Packages
-* Method 1 - Install Packages from `requirements.txt`
-    ```
-    pip install -r requirements.txt
-    ```
 
-* Method 2 - Manual Installation of Packages 
-  ```
-  pip install tensorflow==2.18.0 opencv-python mediapipe scikit-learn matplotlib flask
-  ```
+## Feature Extraction
 
-4. Check the installed packages <br><br>
-    ```
-    pip list
-    ```
-    <br><br>
+This project uses MediaPipe Hands to extract 84 features from hand landmarks:
 
-**Notes**<br><br>
+1. 42 features from 2D normalized coordinates (x,y) of 21 hand landmarks
+2. 21 features from normalized z-coordinates
+3. 5 features representing distances between fingertips and wrist
+4. 4 features representing angles between adjacent fingers
+5. 4 features representing distances between adjacent fingertips
+6. 8 features representing curvature of each finger
 
--Make sure the virtual environment folder and the .py files are _inside_ the `salinsign_v1` folder
-<br><br>
-![image](https://github.com/user-attachments/assets/bfb83ae0-a793-4dc9-822c-d64b26f4c015)
-<br><br>
--When Adding, Commiting, Pushing, **❗❗DO NOT❗❗** include the virtual environment folder `salinenv`
+## Dataset Collection
 
+To collect your own dataset:
+1. Run `collect_imgs.py`
+2. Follow the on-screen instructions to capture images for each sign
+3. Process the dataset with `create_dataset.py`
+4. Train the model with `train_classifier.py`
 
-<h3> Running salinsign_v1 </h3>
+## For Medical Staff
 
-Simply open `salinsign.py`
+This tool is designed to facilitate communication between medical professionals and deaf patients by:
 
-<h3> Retraining salinsign_v1 </h3>
+1. Providing real-time translation of medical sign language
+2. Focusing on common medical terms and conditions
+3. Enabling accurate symptom communication
 
-1. `main.py` to start an entry point for the real-time video processing
-2. `landmarks.py` contains the functions for MediaPipe detection
-3. `extraction.py` to extract keypoints from MediaPipe 
-4. `folder.py` to setup the folder structure for storing keypoint data
-5. `collections.py` data collection
-6. `preprocess.py` to preprocess data and create labels
-7. `lstm.py` to build and train the lstm model
-8. `salinsign.py` to test in real-time
+## Performance Optimization
 
+For computers with lower specifications:
+- Reduced camera resolution settings (640x480)
+- Frame rate controls
+- Feature selection options
 
+## Future Development
+
+- GUI interface for easier interaction
+- Text-to-sign language translation
+- Expanded medical vocabulary
+- Standalone executable application
+
+## Requirements
+
+- Python 3.7+
+- OpenCV 4.7.0.68
+- MediaPipe 0.9.0.1
+- scikit-learn 1.2.0
