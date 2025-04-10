@@ -20,12 +20,12 @@ hands = mp_hands.Hands(static_image_mode=True, min_detection_confidence=0.3)
 
 labels_dict = {0: 'Pain', 1: 'Sick', 2: 'Headache', 3: 'Dizzy', 4: 'Vomit', 5: 'Diarrhea', 6: 'Cough', 7: 'Allergy', 
                8: 'Strong', 9: 'Weak', 10: 'Stomachache', 11: 'Sore Throat', 12: 'Sore Throat', 13: 'Injury', 
-               14: 'Breathing Difficulty', 15: 'Breathing Difficulty', 16: 'Food Poisoning', 17: 'Wound', 18: 'Stress',
-               19: 'Conditions', 20: 'Fever', 21: 'Diabetes', 22: 'Back Pain', 23: 'Back Pain', 24: 'Colds', 25: 'Stroke',
-               26: 'Blood Pressure', 27: 'A', 28: 'B', 29: 'C', 30: 'D', 31: 'E', 32: 'F', 33: 'G', 34: 'H', 35: 'I', 
+               14: 'Breathing Difficulty', 15: 'Food Poisoning', 16: 'Wound', 17: 'Stress',
+               18: 'Conditions', 19: 'Fever', 20: 'Diabetes', 21: 'Back Pain', 22: 'Back Pain', 23: 'Colds', 24: 'Stroke',
+               25: 'Blood Pressure', 26: 'Heartache', 27: 'A', 28: 'B', 29: 'C', 30: 'D', 31: 'E', 32: 'F', 33: 'G', 34: 'H', 35: 'I', 
                36: 'J', 37: 'K', 38: 'L', 39: 'M', 40: 'N', 41: 'O', 42: 'P', 43: 'Q', 44: 'R', 45: 'S', 46: 'T', 
                47: 'U', 48: 'V', 49: 'W', 50: 'X', 51: 'Y', 52: 'Z', 53: 'Hello', 54: 'Good Morning', 55: 'Good Afternooon',
-               56: 'Good Evening', 57: 'Thank You'} 
+               56: 'Good Evening'} 
 while True:
 
     data_aux = []
