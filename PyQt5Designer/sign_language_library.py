@@ -1,16 +1,336 @@
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QLabel, QTabWidget, 
-                             QListWidget, QListWidgetItem, QSplitter, QFrame,
-                             QGraphicsDropShadowEffect, QAbstractItemView)
-from PyQt5.QtGui import QPixmap, QIcon, QFont, QColor
-from PyQt5.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve
+                             QScrollArea, QGridLayout, QFrame, QSizePolicy,
+                             QGraphicsDropShadowEffect, QDialog, QTabBar,
+                             QLineEdit, QComboBox, QListWidget, QListWidgetItem,
+                             QSplitter, QAbstractItemView)
+from PyQt5.QtGui import QPixmap, QIcon, QFont, QColor, QPainterPath, QPen, QPainter
+from PyQt5.QtCore import Qt, QSize, QRectF, QPoint, pyqtProperty, QPropertyAnimation, QEasingCurve
+from functools import partial
+
+class RoundedItemFrame(QFrame):
+    """Custom rounded frame for catalog items"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.radius = 12
+        self.setMinimumSize(180, 200)
+        self.setMaximumSize(220, 240)  # Set maximum size for consistency
+        
+    def paintEvent(self, event):
+        """Custom paint event to create rounded corners"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        path = QPainterPath()
+        rect = QRectF(0, 0, float(self.width()), float(self.height()))
+        path.addRoundedRect(rect, self.radius, self.radius)
+        
+        painter.setClipPath(path)
+        painter.fillRect(0, 0, self.width(), self.height(), self.palette().color(self.backgroundRole()))
+
+class CatalogItem(QWidget):
+    """Widget for individual catalog items"""
+    def __init__(self, title, image_path, color_scheme, category, parent=None):
+        super().__init__(parent)
+        self.title = title
+        self.image_path = image_path
+        self.color_scheme = color_scheme
+        self.category = category
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Container with shadow
+        self.container = RoundedItemFrame()
+        self.container.setStyleSheet(f"""
+            background-color: {self.color_scheme['item_bg']};
+            border: none;
+        """)
+        self.container.setAutoFillBackground(True)
+        
+        # Add shadow effect
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(15)
+        shadow.setColor(QColor(0, 0, 0, 40))
+        shadow.setOffset(0, 2)
+        self.container.setGraphicsEffect(shadow)
+        
+        container_layout = QVBoxLayout(self.container)
+        container_layout.setContentsMargins(10, 10, 10, 10)
+        container_layout.setSpacing(5)
+        
+        # Image label with fixed size for uniform grid
+        self.image_label = QLabel()
+        self.image_label.setFixedSize(160, 160)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setStyleSheet("background-color: white; border-radius: 8px;")
+        
+        # Load and scale the image
+        pixmap = QPixmap(self.image_path)
+        if not pixmap.isNull():
+            scaled_pixmap = pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.image_label.setPixmap(scaled_pixmap)
+        else:
+            self.image_label.setText("Image not found")
+        
+        # Title label with fixed height
+        self.title_label = QLabel(self.title)
+        self.title_label.setFixedHeight(25)
+        self.title_label.setAlignment(Qt.AlignCenter)
+        self.title_label.setStyleSheet(f"""
+            color: {self.color_scheme['text_color']};
+            font-weight: bold;
+            font-size: 12px;
+        """)
+        
+        container_layout.addWidget(self.image_label)
+        container_layout.addWidget(self.title_label)
+        
+        layout.addWidget(self.container)
+        
+        # Make the item clickable
+        self.setCursor(Qt.PointingHandCursor)
+    
+    def mousePressEvent(self, event):
+        """Handle mouse press to show detail dialog"""
+        if event.button() == Qt.LeftButton:
+            self.show_detail_dialog()
+            
+    def show_detail_dialog(self):
+        """Show a dialog with larger image and details"""
+        dialog = DetailDialog(self.title, self.image_path, self.color_scheme, self.category, self)
+        dialog.exec_()
+
+class DetailDialog(QDialog):
+    """Dialog showing details for a selected sign"""
+    def __init__(self, title, image_path, color_scheme, category, parent=None):
+        super().__init__(parent)
+        self.title = title
+        self.image_path = image_path
+        self.color_scheme = color_scheme
+        self.category = category
+        self.offset = None
+        
+        self.setWindowTitle(title)
+        self.setMinimumSize(600, 500)
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        self.setup_ui()
+        
+        # Animation for opening
+        self.animation = QPropertyAnimation(self, b"windowOpacity")
+        self.animation.setDuration(250)
+        self.animation.setStartValue(0.0)
+        self.animation.setEndValue(1.0)
+        self.animation.setEasingCurve(QEasingCurve.InOutQuad)
+        self.animation.start()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Main content frame with rounded corners
+        main_frame = QFrame()
+        main_frame.setStyleSheet(f"""
+            background-color: {self.color_scheme['primary']};
+            border-radius: 15px;
+        """)
+        
+        # Add shadow
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 80))
+        shadow.setOffset(0, 5)
+        main_frame.setGraphicsEffect(shadow)
+        
+        main_layout = QVBoxLayout(main_frame)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Header with title and close button
+        header_layout = QHBoxLayout()
+        
+        # Add category badge
+        category_badge = QLabel(self.category)
+        category_badge.setStyleSheet(f"""
+            background-color: rgba(255, 255, 255, 0.3);
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 10px;
+            padding: 3px 10px;
+        """)
+        category_badge.setFixedHeight(25)
+        
+        title_label = QLabel(self.title)
+        title_label.setStyleSheet(f"""
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        """)
+        
+        close_button = QPushButton("×")
+        close_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: white;
+                font-size: 24px;
+                font-weight: bold;
+                border: none;
+                padding: 5px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.2);
+                border-radius: 15px;
+            }
+        """)
+        close_button.setFixedSize(30, 30)
+        close_button.clicked.connect(self.close)
+        
+        header_layout.addWidget(category_badge)
+        header_layout.addSpacing(10)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        header_layout.addWidget(close_button)
+        
+        # Image container with white background
+        image_container = QFrame()
+        image_container.setStyleSheet("""
+            background-color: white;
+            border-radius: 10px;
+        """)
+        image_container_layout = QVBoxLayout(image_container)
+        
+        # Image label
+        image_label = QLabel()
+        image_label.setAlignment(Qt.AlignCenter)
+        image_label.setMinimumSize(500, 350)
+        
+        # Load and scale image
+        pixmap = QPixmap(self.image_path)
+        if not pixmap.isNull():
+            scaled_pixmap = pixmap.scaled(
+                500, 350,
+                Qt.KeepAspectRatio, 
+                Qt.SmoothTransformation
+            )
+            image_label.setPixmap(scaled_pixmap)
+        else:
+            image_label.setText("Image not found")
+            image_label.setStyleSheet("color: #333; font-size: 16px;")
+        
+        image_container_layout.addWidget(image_label)
+        
+        # Additional content could go here
+        description_label = QLabel("Practice this sign by following the image.")
+        description_label.setStyleSheet("color: white; font-size: 14px;")
+        description_label.setAlignment(Qt.AlignCenter)
+        
+        # Add widgets to main layout
+        main_layout.addLayout(header_layout)
+        main_layout.addWidget(image_container, 1)  # 1 = stretch factor
+        main_layout.addWidget(description_label)
+        
+        layout.addWidget(main_frame)
+    
+    def mousePressEvent(self, event):
+        """Allow dialog to be moved by dragging"""
+        if event.button() == Qt.LeftButton:
+            self.offset = event.pos()
+        else:
+            super().mousePressEvent(event)
+            
+    def mouseMoveEvent(self, event):
+        """Move dialog with mouse"""
+        if self.offset is not None and event.buttons() == Qt.LeftButton:
+            self.move(self.pos() + event.pos() - self.offset)
+        else:
+            super().mouseMoveEvent(event)
+            
+    def mouseReleaseEvent(self, event):
+        """Reset offset on mouse release"""
+        self.offset = None
+        super().mouseReleaseEvent(event)
+        
+    def close(self):
+        """Override close with fade animation"""
+        self.animation = QPropertyAnimation(self, b"windowOpacity")
+        self.animation.setDuration(150)
+        self.animation.setStartValue(1.0)
+        self.animation.setEndValue(0.0)
+        self.animation.setEasingCurve(QEasingCurve.InOutQuad)
+        self.animation.finished.connect(super().close)
+        self.animation.start()
+
+class CustomTabBar(QTabBar):
+    """Custom tab bar with modern browser-like curved tabs"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.tab_colors = []
+        
+    def set_tab_colors(self, colors):
+        """Set colors for different tabs"""
+        self.tab_colors = colors
+        self.update()
+        
+    def paintEvent(self, event):
+        """Custom paint event to style tabs with curved edges"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        for i in range(self.count()):
+            rect = self.tabRect(i)
+            
+            # Create path with curved top corners
+            path = QPainterPath()
+            radius = 10  # Corner radius
+            
+            # Start from bottom-left
+            path.moveTo(rect.left(), rect.bottom())
+            
+            # Draw line to top-left and add curve for top-left corner
+            path.lineTo(rect.left(), rect.top() + radius)
+            path.arcTo(rect.left(), rect.top(), radius * 2, radius * 2, 180, -90)
+            
+            # Draw line across top and add curve for top-right corner
+            path.lineTo(rect.right() - radius, rect.top())
+            path.arcTo(rect.right() - radius * 2, rect.top(), radius * 2, radius * 2, 90, -90)
+            
+            # Draw line to bottom-right and close the path
+            path.lineTo(rect.right(), rect.bottom())
+            path.lineTo(rect.left(), rect.bottom())
+            
+            # Fill with appropriate color
+            if i == self.currentIndex() and i < len(self.tab_colors):
+                painter.fillPath(path, QColor(self.tab_colors[i]))
+            else:
+                painter.fillPath(path, QColor("#F0F0F0"))  # Default background color
+            
+            # Draw text with appropriate color
+            text = self.tabText(i)
+            if i == self.currentIndex():
+                painter.setPen(QColor("#FFFFFF"))  # White text for selected tab
+            else:
+                # Use the tab's color for text when not selected
+                painter.setPen(QColor(self.tab_colors[i]) if i < len(self.tab_colors) else QColor("#333333"))
+            
+            font = painter.font()
+            font.setBold(True)
+            painter.setFont(font)
+            
+            # Center text in tab
+            text_rect = rect.adjusted(10, 5, -10, -5)
+            painter.drawText(text_rect, Qt.AlignCenter, text)
 
 class SignLanguageLibrary(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Sign Language Library")
-        self.setMinimumSize(1000, 600)
+        self.setWindowTitle("Sign Language Catalog")
+        self.setMinimumSize(1000, 700)  # Increased height for search bar
         
         # Set app-wide font
         font = QFont("Segoe UI", 10)
@@ -19,7 +339,7 @@ class SignLanguageLibrary(QMainWindow):
         # Define a consistent color scheme
         self.colors = {
             "primary": "#4FB0AA",
-            "secondary": "#4FB0AA",  # Matching primary for consistency
+            "secondary": "#4FB0AA",
             "background": "#f8f9fa",
             "surface": "#ffffff",
             "border": "#e0e0e0",
@@ -27,42 +347,53 @@ class SignLanguageLibrary(QMainWindow):
             "active": "#e0e0e0",
             "text": "#333333",
             "text_light": "#666666",
-            "active_text": "#ffffff",  # Text color for active items
-            "tab_background": "#F0F0F0"  # Light grey for tab backgrounds
+            "active_text": "#ffffff",
+            "tab_background": "#F0F0F0"
         }
         
-        # Define tab colors
+        # Define tab colors (keeping your preferred order)
         self.tab_colors = {
             "alphabet": {
                 "primary": "#4FB0AA",  # Teal
                 "hover": "#E6F7F6",
                 "item_bg": "#E6F7F6",
                 "item_selected": "#4FB0AA",
-                "item_hover": "#D0EFED"
+                "item_hover": "#D0EFED",
+                "text_color": "#2A6762"
             },
             "numbers": {
                 "primary": "#5B6ABB",  # Blue
                 "hover": "#E6E9F7",
                 "item_bg": "#E6E9F7",
                 "item_selected": "#5B6ABB",
-                "item_hover": "#D0D6EF"
+                "item_hover": "#D0D6EF",
+                "text_color": "#344380"
             },
             "greetings": {
                 "primary": "#E67E22",  # Orange
                 "hover": "#FBF1E6",
                 "item_bg": "#FBF1E6",
                 "item_selected": "#E67E22",
-                "item_hover": "#F7E0C9"
+                "item_hover": "#F7E0C9",
+                "text_color": "#A05816"
             },
             "medical": {
                 "primary": "#E74C3C",  # Red
                 "hover": "#FCE9E7",
                 "item_bg": "#FCE9E7",
                 "item_selected": "#E74C3C",
-                "item_hover": "#F8D4D0"
+                "item_hover": "#F8D4D0",
+                "text_color": "#A03529"
             }
         }
         
+        # Store all items for search functionality
+        self.all_items = {}
+        
+        # Initialize UI
+        self.setup_ui()
+        
+    def setup_ui(self):
         # Create central widget and main layout
         central_widget = QWidget()
         central_widget.setStyleSheet(f"background-color: {self.colors['background']};")
@@ -82,17 +413,17 @@ class SignLanguageLibrary(QMainWindow):
         header_layout = QHBoxLayout(header_frame)
         header_layout.setContentsMargins(20, 10, 20, 10)
         
-        # Improved back button with larger icon
+        # Back button with icon
         back_button = QPushButton()
         back_icon = QIcon("images/backbutton.png")
         back_button.setIcon(back_icon)
-        back_button.setIconSize(QSize(50, 50))  # Adjust icon size here
+        back_button.setIconSize(QSize(40, 40))
         back_button.setStyleSheet(f"""
             QPushButton {{
                 background-color: {self.colors['surface']};
                 border: none;
-                border-radius: 22px;
-                padding: 10px;
+                border-radius: 20px;
+                padding: 5px;
             }}
             QPushButton:hover {{
                 background-color: {self.colors['hover']};
@@ -101,9 +432,10 @@ class SignLanguageLibrary(QMainWindow):
                 background-color: {self.colors['active']};
             }}
         """)
-        back_button.setFixedSize(50, 50)  # Adjust button size here
+        back_button.setFixedSize(40, 40)
+        back_button.clicked.connect(self.go_back)
         
-        # Title with modern styling
+        # Title with logo
         title_label = QLabel()
         title_pixmap = QPixmap("images/signlibrary.png")
         title_label.setPixmap(title_pixmap)
@@ -115,225 +447,102 @@ class SignLanguageLibrary(QMainWindow):
         # Add header to main layout
         main_layout.addWidget(header_frame)
         
-        # Create container for tab widget with padding
-        tab_container = QWidget()
-        tab_container.setStyleSheet(f"background-color: transparent;")  # Make this transparent
-        tab_container_layout = QVBoxLayout(tab_container)
-        tab_container_layout.setContentsMargins(20, 20, 20, 20)
-        
-        # Create tab widget with custom styling
-        tab_widget = QTabWidget()
-        # Make the tab widget itself transparent
-        tab_widget.setStyleSheet(f"background-color: transparent;")
-        
-        # Helper function for creating tab content with unified design
-        def create_tab_content(items, initial_title, color_scheme):
-            tab = QWidget()
-            # Set the tab background to match the color scheme
-            tab.setStyleSheet(f"""
-                background-color: {color_scheme['primary']};
-                border-top-left-radius: 0px;
-                border-top-right-radius: 8px;
-                border-bottom-left-radius: 8px;
-                border-bottom-right-radius: 8px;
-            """)
-            
-            layout = QVBoxLayout(tab)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(0)
-            
-            # Create inner container with rounded corners
-            inner_container = QWidget(tab)
-            inner_container.setStyleSheet(f"""
-                background-color: {color_scheme['primary']};
-                border-radius: 8px;
-            """)
-            inner_layout = QVBoxLayout(inner_container)
-            inner_layout.setContentsMargins(15, 15, 15, 15)
-            
-            # Create splitter with custom styling
-            splitter = QSplitter(Qt.Horizontal)
-            splitter.setHandleWidth(1)
-            splitter.setStyleSheet(f"""
-                QSplitter::handle {{
-                    background-color: {self.colors['active_text']};
-                }}
-            """)
-            
-            # List widget container with rounded corners and shadow
-            list_container = QFrame()
-            list_container.setStyleSheet(f"""
+        # Create search bar container
+        search_container = QFrame()
+        search_container.setStyleSheet(f"""
+            QFrame {{
                 background-color: {self.colors['surface']};
-                border-radius: 8px;
-                margin: 0px;
-                padding: 0px;
-            """)
-            list_container_layout = QVBoxLayout(list_container)
-            list_container_layout.setContentsMargins(5, 5, 5, 5)
-            list_container_layout.setSpacing(0)
-            
-            # Apply shadow to list container
-            list_shadow = QGraphicsDropShadowEffect()
-            list_shadow.setBlurRadius(20)
-            list_shadow.setColor(QColor(0, 0, 0, 30))
-            list_shadow.setOffset(0, 3)
-            list_container.setGraphicsEffect(list_shadow)
-            
-            # Enhanced list widget for word library with button-like items
-            list_widget = QListWidget()
-            list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
-            list_widget.setStyleSheet(f"""
-                QListWidget {{
-                    background: {self.colors['surface']};
-                    border: none;
-                    border-radius: 6px;
-                    padding: 5px;
-                    outline: none;
-                }}
-                QListWidget::item {{
-                    background-color: {color_scheme['item_bg']};
-                    padding: 12px 15px;
-                    border-radius: 6px;
-                    color: {self.colors['text']};
-                    margin: 3px 2px;
-                    font-weight: 500;
-                    font-size: 11px;
-                }}
-                QListWidget::item:selected {{
-                    background: {color_scheme['item_selected']};
-                    color: {self.colors['active_text']};
-                    border: none;
-                    outline: none;
-                    font-weight: bold;
-                }}
-                QListWidget::item:hover:!selected {{
-                    background: {color_scheme['item_hover']};
-                }}
-                
-                /* Hide focus rectangle completely */
-                QListWidget:focus {{
-                    outline: none;
-                }}
-                QListWidget::item:focus {{
-                    outline: none;
-                    border: none;
-                }}
-            """)
-            
-            # Disable focus rect explicitly
-            list_widget.setFocusPolicy(Qt.NoFocus)
-            
-            # Add items
-            for item_text in items:
-                item = QListWidgetItem(item_text)
-                list_widget.addItem(item)
-            
-            list_container_layout.addWidget(list_widget)
-            
-            # Content frame with improved layout and matching color
-            content_frame = QFrame()
-            content_frame.setStyleSheet(f"""
-                QFrame {{
-                    background: {color_scheme['primary']};
-                    padding: 0px;
-                    border: none;
-                    border-radius: 8px;
-                }}
-            """)
-            content_layout = QVBoxLayout(content_frame)
-            content_layout.setContentsMargins(25, 15, 25, 15)
-            content_layout.setSpacing(10)
-            
-            # Title with white text to contrast with the primary color
-            title_label = QLabel(initial_title)
-            title_label.setStyleSheet(f"""
-                color: {self.colors['active_text']}; 
-                font-size: 22px; 
-                font-weight: bold;
-                padding: 5px 0;
-                margin: 0;
-            """)
-            title_label.setAlignment(Qt.AlignLeft)
-            title_label.setMaximumHeight(40)
-            
-            # Improved image container with contrasting background
-            image_container = QFrame()
-            image_container.setStyleSheet(f"""
-                background: {self.colors['surface']};
-                border-radius: 12px;
-                padding: 0px;
+                border-bottom: 1px solid {self.colors['border']};
+            }}
+            QLineEdit {{
+                border: 1px solid {self.colors['border']};
+                border-radius: 20px;
+                padding: 8px 15px;
+                background-color: {self.colors['background']};
+                selection-background-color: {self.colors['primary']};
+            }}
+            QComboBox {{
+                border: 1px solid {self.colors['border']};
+                border-radius: 20px;
+                padding: 8px 15px;
+                background-color: {self.colors['background']};
+                selection-background-color: {self.colors['primary']};
+            }}
+            QComboBox::drop-down {{
                 border: none;
-            """)
-            image_container_layout = QVBoxLayout(image_container)
-            image_container_layout.setContentsMargins(0, 0, 0, 0)
-            
-            image_label = QLabel()
-            image_label.setStyleSheet("""
-                background-color: transparent;
-                min-height: 300px;
-                border-radius: 12px;
-            """)
-            image_label.setAlignment(Qt.AlignCenter)
-            image_label.setScaledContents(False)
-            
-            # Apply shadow effect to image container
-            image_shadow = QGraphicsDropShadowEffect()
-            image_shadow.setBlurRadius(20)
-            image_shadow.setColor(QColor(0, 0, 0, 30))
-            image_shadow.setOffset(0, 3)
-            image_container.setGraphicsEffect(image_shadow)
-            
-            image_container_layout.addWidget(image_label)
-            
-            # Add widgets to content layout
-            content_layout.addWidget(title_label)
-            content_layout.addWidget(image_container, 1)
-            
-            # Add widgets to splitter
-            splitter.addWidget(list_container)
-            splitter.addWidget(content_frame)
-            splitter.setSizes([250, 750])
-            
-            inner_layout.addWidget(splitter)
-            layout.addWidget(inner_container)
-            
-            return tab, list_widget, title_label, image_label
+                width: 24px;
+            }}
+            QPushButton {{
+                background-color: {self.colors['primary']};
+                color: white;
+                border: none;
+                border-radius: 20px;
+                padding: 8px 20px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: #45A29A;
+            }}
+            QPushButton:pressed {{
+                background-color: #3A8A84;
+            }}
+        """)
+        search_layout = QHBoxLayout(search_container)
+        search_layout.setContentsMargins(20, 10, 20, 10)
         
-        # Create all tabs with different color schemes
-        alphabet_items = [f"Letter {letter}" for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
-        alphabet_tab, letter_list, letter_title, letter_image = create_tab_content(
-            alphabet_items, "Letter A", self.tab_colors["alphabet"]
-        )
+        # Search icon
+        search_icon_label = QLabel()
+        search_icon = QPixmap("images/search_icon.png")
+        if search_icon.isNull():
+            search_icon_label.setText("🔍")
+            search_icon_label.setStyleSheet("font-size: 16px; color: #888;")
+        else:
+            search_icon_label.setPixmap(search_icon.scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        search_icon_label.setFixedSize(30, 30)
+        search_icon_label.setAlignment(Qt.AlignCenter)
         
-        number_items = [f"Number {num}" for num in range(1, 11)]
-        numbers_tab, numbers_list, number_title, number_image = create_tab_content(
-            number_items, "Number 1", self.tab_colors["numbers"]
-        )
+        # Search input field
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search sign language...")
+        self.search_input.setMinimumWidth(300)
         
-        greetings = ["Hello", "Good morning", "Good afternoon", "Good evening", "Thank you", "Goodbye"]
-        greetings_tab, greetings_list, greeting_title, greeting_image = create_tab_content(
-            greetings, "Hello", self.tab_colors["greetings"]
-        )
+        # Category filter dropdown
+        self.category_filter = QComboBox()
+        self.category_filter.addItem("All Categories")
+        self.category_filter.addItem("Medical")
+        self.category_filter.addItem("Greetings")
+        self.category_filter.addItem("Alphabet")
+        self.category_filter.addItem("Numbers")
         
-        medical_terms = ["Pain", "Sick", "Headache", "Dizzy", "Vomit", "Diarrhea",
-                        "Cough", "Allergy", "Strong", "Weak", "Stomachache", "Sore throat",
-                        "Injury", "Breathing Difficulty", "Food Poisoning", "Wound", "Stress", 
-                        "Conditions", "Fever", "Diabetes", "Back pain", "Cold", "Stroke", 
-                        "Blood Pressure", "Heartache"]
-        medical_tab, medical_list, medical_title, medical_image = create_tab_content(
-            medical_terms, "Pain", self.tab_colors["medical"]
-        )
+        # Search button
+        search_button = QPushButton("Search")
+        search_button.clicked.connect(self.perform_search)
         
-        # Create a list of tab color schemes in the same order as tabs will be added
-        tab_color_schemes = [
-            self.tab_colors["alphabet"],
-            self.tab_colors["numbers"],
-            self.tab_colors["greetings"],
-            self.tab_colors["medical"]
-        ]
+        # Add search elements to layout
+        search_layout.addWidget(search_icon_label)
+        search_layout.addWidget(self.search_input)
+        search_layout.addWidget(self.category_filter)
+        search_layout.addWidget(search_button)
         
-        # Set the base styling for tab widget - with completely transparent pane
-        tab_widget.setStyleSheet(f"""
+        # Add search container to main layout
+        main_layout.addWidget(search_container)
+        
+        # Create tab widget with custom tab bar
+        self.tab_widget = QTabWidget()
+        # Replace default tab bar with our custom one
+        custom_tab_bar = CustomTabBar()
+        self.tab_widget.setTabBar(custom_tab_bar)
+        
+        # Set the tab colors in your preferred order
+        custom_tab_bar.set_tab_colors([
+            self.tab_colors["medical"]["primary"],
+            self.tab_colors["greetings"]["primary"],
+            self.tab_colors["alphabet"]["primary"],
+            self.tab_colors["numbers"]["primary"]
+        ])
+        
+        # Apply the tab styling from your old code
+        self.tab_widget.setStyleSheet(f"""
             QTabWidget {{
                 background-color: transparent;
             }}
@@ -404,157 +613,397 @@ class SignLanguageLibrary(QMainWindow):
         shadow.setBlurRadius(15)
         shadow.setColor(QColor(0, 0, 0, 40))
         shadow.setOffset(0, 2)
-        tab_widget.setGraphicsEffect(shadow)
+        self.tab_widget.setGraphicsEffect(shadow)
         
-        # Add tabs to tab widget
-        tab_widget.addTab(alphabet_tab, "Alphabet")
-        tab_widget.addTab(numbers_tab, "Numbers")
-        tab_widget.addTab(greetings_tab, "Greetings")
-        tab_widget.addTab(medical_tab, "Medical")
+        # Define categories with their items, alphabetically sorted
+        alphabet_items = sorted([f"Letter {letter}" for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"])
         
-        # Use a more reliable method to style individual tabs
-        # This method gets the actual tab widget and styles it directly
-        # We get the tabBar and then style each tab separately
-        tab_bar = tab_widget.tabBar()
+        number_items = sorted([f"Number {num}" for num in range(1, 11)], 
+                             key=lambda x: int(x.split()[-1]))  # Sort numerically
         
-        # Apply the specific color scheme to each tab
-        for i, scheme in enumerate(tab_color_schemes):
-            # Create a style sheet for each individual tab
-            tab_style = f"""
-                QTabBar::tab:selected:only-one, QTabBar::tab:selected {{
-                    background: {scheme['primary']};
-                    color: {self.colors['active_text']};
-                }}
-                QTabBar::tab:!selected:hover {{
-                    background: {scheme['hover']};
-                }}
-            """
-            
-            # Set the style sheet for this specific tab
-            tab_bar.setTabData(i, tab_style)
-            
-        # Override the paintEvent of the tab bar to apply individual tab styles
-        original_paint_event = tab_bar.paintEvent
+        greeting_items = sorted([
+            "Good afternoon", "Good evening", "Good morning", "Goodbye", "Hello", "Thank you"
+        ])
         
-        def custom_paint_event(event):
-            # Apply individual styling before painting
-            for i in range(tab_bar.count()):
-                if tab_bar.tabData(i):
-                    # If this tab is currently selected
-                    if i == tab_bar.currentIndex():
-                        tab_bar.setStyleSheet(tab_bar.tabData(i))
-            
-            # Call the original paint event
-            original_paint_event(event)
+        medical_items = sorted([
+            "Allergy", "Back pain", "Blood Pressure", "Cold", "Conditions", 
+            "Cough", "Diabetes", "Diarrhea", "Dizzy", "Fever", "Food Poisoning", 
+            "Headache", "Heartache", "Injury", "Pain", "Sick", "Sore throat", 
+            "Stomachache", "Stress", "Stroke", "Strong", "Vomit", "Weak", 
+            "Wound", "Breathing Difficulty"
+        ])
         
-        # Replace the paint event with our custom one
-        tab_bar.paintEvent = custom_paint_event
+        # Create tabs with catalog grid layout in your preferred order
+        self.tab_widget.addTab(self.create_catalog_tab(
+            "Medical", medical_items, self.tab_colors["medical"]
+        ), "Medical")
+
+        self.tab_widget.addTab(self.create_catalog_tab(
+            "Greetings", greeting_items, self.tab_colors["greetings"]
+        ), "Greetings")
+
+        self.tab_widget.addTab(self.create_catalog_tab(
+            "Alphabet", alphabet_items, self.tab_colors["alphabet"]
+        ), "Alphabet")
         
-        # Add tab widget to container
-        tab_container_layout.addWidget(tab_widget)
+        self.tab_widget.addTab(self.create_catalog_tab(
+            "Numbers", number_items, self.tab_colors["numbers"]
+        ), "Numbers")
         
-        # Add container to main layout
+        # Create search results tab (initially hidden)
+        self.search_results_tab = self.create_empty_search_tab()
+        
+        # Add tab widget to main layout with padding
+        tab_container = QWidget()
+        tab_container_layout = QVBoxLayout(tab_container)
+        tab_container_layout.setContentsMargins(20, 20, 20, 20)
+        tab_container_layout.addWidget(self.tab_widget)
         main_layout.addWidget(tab_container)
         
-        # Set initial selection for each list to avoid empty state
-        letter_list.setCurrentRow(0)
-        numbers_list.setCurrentRow(0)
-        greetings_list.setCurrentRow(0)
-        medical_list.setCurrentRow(0)
+        # Connect search input to search function
+        self.search_input.returnPressed.connect(self.perform_search)
         
-        # Unified update function for all tabs
-        def update_content(title_label, image_label, text, image_prefix):
-            # Update title with unified styling
-            title_label.setText(text)
+    def create_catalog_tab(self, category, items, color_scheme):
+        """Create a tab with a grid of catalog items"""
+        # Container widget
+        tab = QWidget()
+        tab.setStyleSheet(f"background-color: {color_scheme['primary']};")
+        
+        # Main layout
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Create a scroll area for the grid
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setStyleSheet(f"background-color: {color_scheme['primary']};")
+        
+        # Create content widget for the scroll area
+        content = QWidget()
+        content.setStyleSheet(f"background-color: {color_scheme['primary']};")
+        
+        # Grid layout for items
+        grid = QGridLayout(content)
+        grid.setContentsMargins(10, 10, 10, 10)
+        grid.setSpacing(20)  # Increased spacing for better visual consistency
+        
+        # Create catalog items and add to grid
+        row, col = 0, 0
+        max_cols = 4  # 4 items per row
+        
+        # Store items for search functionality
+        if category not in self.all_items:
+            self.all_items[category] = []
             
-            # Get image path
-            if "Letter" in text:
-                letter_value = text.split()[-1].lower()
-                image_path = f"images/{image_prefix}_{letter_value}.png"
-            elif "Number" in text:
-                number_value = text.split()[-1]
-                image_path = f"images/{image_prefix}_{number_value}.png"
+        for item_text in items:
+            # Determine image path based on the item type
+            if "Letter" in item_text:
+                letter_value = item_text.split()[-1].lower()
+                image_path = f"images/letter_{letter_value}.png"
+            elif "Number" in item_text:
+                number_value = item_text.split()[-1]
+                image_path = f"images/number_{number_value}.png"
             else:
-                filename = text.lower().replace(' ', '_').replace('?', '').replace('!', '')
-                image_path = f"images/{image_prefix}_{filename}.png"
+                filename = item_text.lower().replace(' ', '_').replace('?', '').replace('!', '')
+                image_path = f"images/{category.lower()}_{filename}.png"
             
-            # Update image with proper scaling
-            pixmap = QPixmap(image_path)
-            if not pixmap.isNull():
-                # Use scaled to maintain aspect ratio
-                max_width = 800
-                max_height = 480
+            # Store item info for search
+            self.all_items[category].append({
+                'title': item_text,
+                'image_path': image_path,
+                'color_scheme': color_scheme,
+                'category': category
+            })
+            
+            # Create catalog item
+            catalog_item = CatalogItem(item_text, image_path, color_scheme, category)
+            
+            # Set fixed size for uniform grid
+            catalog_item.setFixedSize(200, 220)
+            
+            # Add to grid
+            grid.addWidget(catalog_item, row, col)
+            
+            # Update row and column
+            col += 1
+            if col >= max_cols:
+                col = 0
+                row += 1
+        
+        # Add empty widgets to fill the grid
+        while col > 0 and col < max_cols:
+            spacer = QWidget()
+            spacer.setFixedSize(200, 220)  # Same size as catalog items
+            spacer.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            grid.addWidget(spacer, row, col)
+            col += 1
+        
+        # Set scroll content
+        scroll_area.setWidget(content)
+        
+        # Add scroll area to layout
+        layout.addWidget(scroll_area)
+        
+        return tab
+        
+    def create_empty_search_tab(self):
+        """Create an empty tab for search results"""
+        tab = QWidget()
+        tab.setStyleSheet(f"background-color: {self.colors['background']};")
+        
+        layout = QVBoxLayout(tab)
+        layout.setAlignment(Qt.AlignCenter)
+        
+        message = QLabel("Search results will appear here")
+        message.setStyleSheet("color: #888; font-size: 16px;")
+        message.setAlignment(Qt.AlignCenter)
+        
+        layout.addWidget(message)
+        
+        return tab
+        
+    def create_search_results_tab(self, results, query):
+        """Create a tab with search results"""
+        tab = QWidget()
+        tab.setStyleSheet(f"background-color: {self.colors['primary']};")
+
+        # Main layout
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(15, 15, 15, 15)
+ 
+        # Add search bar and cancel button at the top
+        search_header = QHBoxLayout()
+        search_label = QLabel(f"Search results for: '{query}'")
+        search_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
+
+        clear_button = QPushButton("Clear Search")
+        clear_button.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                color: #333;
+                border: none;
+                border-radius: 15px;
+                padding: 5px 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #eee;
+            }
+        """)
+        clear_button.clicked.connect(self.clear_search)
+
+        search_header.addWidget(search_label)
+        search_header.addStretch()
+        search_header.addWidget(clear_button)
+        layout.addLayout(search_header)
+
+        # Create a scroll area for the grid
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setStyleSheet(f"background-color: {self.colors['primary']};")
+
+        # Create content widget for the scroll area
+        content = QWidget()
+        content.setStyleSheet(f"background-color: {self.colors['primary']};")
+
+        if not results:
+            # Handle no results case
+            empty_layout = QVBoxLayout(content)
+            empty_label = QLabel("No results found")
+            empty_label.setStyleSheet("color: white; font-size: 18px; font-weight: bold;")
+            empty_label.setAlignment(Qt.AlignCenter)
+            empty_layout.addWidget(empty_label)
+            empty_layout.setAlignment(Qt.AlignCenter)
+        else:
+            # Grid layout for items with center alignment
+            grid = QGridLayout(content)
+            grid.setContentsMargins(10, 10, 10, 10)
+            grid.setSpacing(20)
+        
+            # Calculate the number of rows and columns needed
+            max_cols = 4  # 4 items per row
+            num_results = len(results)
+            num_rows = (num_results + max_cols - 1) // max_cols  # Ceiling division
+        
+            # Create catalog items and add to grid
+            item_index = 0
+        
+            # Calculate horizontal offset to center items if the last row isn't full
+            items_in_last_row = num_results % max_cols
+            if items_in_last_row == 0 and num_results > 0:
+                items_in_last_row = max_cols
+            
+            # Center the items in the grid
+            grid.setAlignment(Qt.AlignCenter)
+        
+            for row in range(num_rows):
+                # Determine how many items in this row
+                items_in_row = min(max_cols, num_results - row * max_cols)
+            
+                # Calculate offset for centering items in this row
+                offset = (max_cols - items_in_row) // 2 if items_in_row < max_cols else 0
+            
+                for col in range(items_in_row):
+                    if item_index < num_results:
+                        item = results[item_index]
+                    
+                        # Create catalog item
+                        catalog_item = CatalogItem(
+                            item['title'], 
+                            item['image_path'], 
+                            item['color_scheme'],
+                            item['category']
+                        )
                 
-                # Scale the image while maintaining aspect ratio
-                scaled_pixmap = pixmap.scaled(
-                    max_width, 
-                    max_height,
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
-                )
+                        # Set fixed size for uniform grid
+                        catalog_item.setFixedSize(200, 220)
                 
-                image_label.setPixmap(scaled_pixmap)
+                        # Add to grid with proper centering
+                        grid_col = col + offset
+                        grid.addWidget(catalog_item, row, grid_col)
+                    
+                        item_index += 1
+
+        # Set scroll content
+        scroll_area.setWidget(content)
+
+        # Add scroll area to layout
+        layout.addWidget(scroll_area)
+
+        return tab
+
+    def perform_search(self):
+        """Search for items across all categories"""
+        query = self.search_input.text().lower().strip()
+        selected_category = self.category_filter.currentText()
         
-        # Connect signals with the unified update function
-        letter_list.itemClicked.connect(
-            lambda item: update_content(letter_title, letter_image, item.text(), "letter")
-        )
-        numbers_list.itemClicked.connect(
-            lambda item: update_content(number_title, number_image, item.text(), "number")
-        )
-        greetings_list.itemClicked.connect(
-            lambda item: update_content(greeting_title, greeting_image, item.text(), "greeting")
-        )
-        medical_list.itemClicked.connect(
-            lambda item: update_content(medical_title, medical_image, item.text(), "medical")
-        )
+        # If query is empty, do nothing
+        if not query:
+            return
         
-        # Connect tab changed signal to update the tab styling
-        def handle_tab_change(index):
-            # Update the tab bar style to match the currently selected tab
-            if 0 <= index < tab_bar.count() and tab_bar.tabData(index):
-                tab_bar.setStyleSheet(tab_bar.tabData(index))
+        results = []
         
-        tab_widget.currentChanged.connect(handle_tab_change)
+        # Search across all categories or filter by selected category
+        for category, items in self.all_items.items():
+            if selected_category == "All Categories" or selected_category == category:
+                for item in items:
+                    # Check if query is in the item title
+                    if query in item['title'].lower():
+                        # Add category info to the item
+                        item_copy = item.copy()
+                        item_copy['category'] = category
+                        results.append(item_copy)
         
-        # Initialize with first items' content
-        update_content(letter_title, letter_image, "Letter A", "letter")
-        update_content(number_title, number_image, "Number 1", "number")
-        update_content(greeting_title, greeting_image, "Hello", "greeting")
-        update_content(medical_title, medical_image, "Pain", "medical")
+        # Sort results alphabetically
+        results.sort(key=lambda x: x['title'])
         
-        # Connect back button
-        back_button.clicked.connect(self.go_back)
-        
-        # Trigger initial tab style
-        handle_tab_change(0)
+        # Check if "Search Results" tab already exists and remove it
+        search_tab_index = -1
+        for i in range(self.tab_widget.count()):
+            if "Search Results" in self.tab_widget.tabText(i):
+                search_tab_index = i
+                break
+            
+        if search_tab_index >= 0:
+            self.tab_widget.removeTab(search_tab_index)
+    
+        # Create search results tab
+        search_results_tab = self.create_search_results_tab(results, query)
+    
+        # Add search results tab at the end and switch to it
+        self.tab_widget.addTab(search_results_tab, f"Search Results ({len(results)})")
+        self.tab_widget.setCurrentIndex(self.tab_widget.count() - 1)
+    
+        # Update tab bar colors to include the search tab
+        custom_tab_bar = self.tab_widget.tabBar()
+        if isinstance(custom_tab_bar, CustomTabBar):
+            tab_colors = [
+                self.tab_colors["medical"]["primary"],
+                self.tab_colors["greetings"]["primary"],
+                self.tab_colors["alphabet"]["primary"],
+                self.tab_colors["numbers"]["primary"],
+                self.colors["primary"]  # Color for search results tab
+            ]
+            custom_tab_bar.set_tab_colors(tab_colors)
+
+    
+
+    def clear_search(self):
+        """Clear search and remove search results tab"""
+        # Clear search input
+        self.search_input.clear()
+    
+        # Find and remove the search results tab
+        for i in range(self.tab_widget.count()):
+            if "Search Results" in self.tab_widget.tabText(i):
+                self.tab_widget.removeTab(i)
+                break
+    
+        # Reset tab bar colors after removing the search tab
+        custom_tab_bar = self.tab_widget.tabBar()
+        if isinstance(custom_tab_bar, CustomTabBar):
+            tab_colors = [
+                self.tab_colors["medical"]["primary"],
+                self.tab_colors["greetings"]["primary"],
+                self.tab_colors["alphabet"]["primary"],
+                self.tab_colors["numbers"]["primary"]
+            ]
+            custom_tab_bar.set_tab_colors(tab_colors)
+
+    def get_tab_title_by_index(self, index):
+        """Get the original tab title by index"""
+        tab_titles = ["Medical", "Greetings", "Alphabet", "Numbers"]
+        if 0 <= index < len(tab_titles):
+            return tab_titles[index]
+        return "Tab"
 
     def go_back(self):
-        # Import the main menu and return to it
-        from MainMenu import Ui_MainWindow
+        """Handle back button click"""
+        # If in search mode, cancel search and return to normal view
+        if hasattr(self, 'in_search_mode') and self.in_search_mode:
+            self.cancel_search()
+            return
         
-        # Close current window
-        self.close()
-        
-        # Show the main menu window again
-        # Get the instance that was created in __main__
-        for widget in QApplication.topLevelWidgets():
-            if isinstance(widget, QMainWindow) and widget != self:
-                widget.show()
-                return
-        
-        # If no existing main window is found, create a new one
-        self.main_window = QMainWindow()
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self.main_window)
-        self.main_window.show()
+        # Otherwise, return to main menu
+        try:
+            from MainMenu import Ui_MainWindow
+            # Close current window
+            self.close()
+            
+            # Show the main menu window again
+            for widget in QApplication.topLevelWidgets():
+                if isinstance(widget, QMainWindow) and widget != self:
+                    widget.show()
+                    return
+            
+            # If no existing main window is found, create a new one
+            self.main_window = QMainWindow()
+            self.ui = Ui_MainWindow()
+            self.ui.setupUi(self.main_window)
+            self.main_window.show()
+        except ImportError:
+            pass
 
-if __name__ == "__main__":
+# Main application entry point
+def main():
     app = QApplication(sys.argv)
+    app.setStyle('Fusion')  # Use Fusion style for a modern look
     
-    # Set application style
-    app.setStyle("Fusion")
+    # Set application-wide stylesheet
+    app.setStyleSheet("""
+        QMainWindow {
+            background-color: #f8f9fa;
+        }
+        QWidget {
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+    """)
     
     window = SignLanguageLibrary()
     window.show()
     sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()
