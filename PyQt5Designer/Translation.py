@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit,
-                           QScrollArea, QSizePolicy, QFrame)
+                           QScrollArea, QSizePolicy, QFrame, QCheckBox)
 from PyQt5.QtCore import Qt, QSize, QUrl, QThread, pyqtSignal, QByteArray, QTime, QTimer
 from PyQt5.QtGui import QPixmap, QCursor, QFont, QImage
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
@@ -202,6 +202,9 @@ class TranslationModule(QMainWindow):
         # Initialize messages list
         self.messages = []
         
+        # Initialize display mode (True for text, False for sign language)
+        self.text_mode = True
+        
         # Setup UI
         self.setup_ui()
         
@@ -343,7 +346,7 @@ class TranslationModule(QMainWindow):
         
         # Box 2 Header
         self.chat_header = QLabel()
-        self.chat_header.setPixmap(QPixmap("images/Chatbox.png").scaledToWidth(300, Qt.SmoothTransformation))
+        self.chat_header.setPixmap(QPixmap("images/Chatbox.png").scaledToWidth(200, Qt.SmoothTransformation))
         self.chat_header.setAlignment(Qt.AlignCenter)
         self.box2_layout.addWidget(self.chat_header)
         
@@ -351,6 +354,17 @@ class TranslationModule(QMainWindow):
         self.chat_box = QTextEdit()
         self.chat_box.setReadOnly(True)
         self.chat_box.setObjectName("chatBox")
+        self.chat_box.setPlaceholderText("No messages yet. Start typing to begin the conversation.")
+        self.chat_box.setStyleSheet("""
+            QTextEdit {
+                background-color: white;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 10px;
+                font-size: 18px;  /* Increased from 14px */
+                min-height: 300px;
+            }
+        """)
         self.box2_layout.addWidget(self.chat_box)
         
         # Sign Language Display Area
@@ -393,6 +407,7 @@ class TranslationModule(QMainWindow):
         
         self.sign_display_scroll.setWidget(self.sign_display)
         self.sign_display_scroll.setMinimumHeight(250)
+        self.sign_display_scroll.hide()  # Hide sign display by default
         self.box2_layout.addWidget(self.sign_display_scroll)
         
         # Input Container for User 2 (Doctor)
@@ -405,8 +420,58 @@ class TranslationModule(QMainWindow):
         self.send_button2.setCursor(QCursor(Qt.PointingHandCursor))
         self.send_button2.clicked.connect(lambda: self.send_message("Doctor", self.input_user2.text()))
         
+        # Add display mode toggle
+        self.display_mode_toggle = QCheckBox("Text Mode")
+        self.display_mode_toggle.setChecked(True)  # Set Text Mode as default
+        self.display_mode_toggle.setCursor(QCursor(Qt.PointingHandCursor))
+        self.display_mode_toggle.stateChanged.connect(self.toggle_display_mode)
+        self.display_mode_toggle.setStyleSheet("""
+            QCheckBox {
+                font-size: 14px;
+                font-weight: bold;
+                color: #333;
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+            }
+            QCheckBox::indicator:unchecked {
+                background-color: #f0f0f0;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 2px solid #45a049;
+                border-radius: 3px;
+            }
+        """)
+        
+        # Add clear chat button
+        self.clear_chat_button = QPushButton("Clear Chat")
+        self.clear_chat_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.clear_chat_button.clicked.connect(self.clear_chat)
+        self.clear_chat_button.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                background-color: #ff4444;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                font-weight: bold;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #ff6666;
+            }
+        """)
+        
         self.input_container2.addWidget(self.input_user2)
         self.input_container2.addWidget(self.send_button2)
+        self.input_container2.addWidget(self.display_mode_toggle)
+        self.input_container2.addWidget(self.clear_chat_button)
         self.box2_layout.addLayout(self.input_container2)
         
         # Add Box 2 to container
@@ -451,7 +516,7 @@ class TranslationModule(QMainWindow):
         logo_scale_factor = scale_factor * 0.6  # 60% of the original size
         self.header_image.setPixmap(QPixmap("images/Translation.png").scaledToWidth(int(600 * logo_scale_factor), Qt.SmoothTransformation))
         self.stream_header.setPixmap(QPixmap("images/Stream.png").scaledToWidth(int(300 * scale_factor), Qt.SmoothTransformation))
-        self.chat_header.setPixmap(QPixmap("images/Chatbox.png").scaledToWidth(int(300 * scale_factor), Qt.SmoothTransformation))
+        self.chat_header.setPixmap(QPixmap("images/Chatbox.png").scaledToWidth(int(235 * scale_factor), Qt.SmoothTransformation))
         
         # Update font sizes
         font_size = max(12, int(14 * scale_factor))
@@ -583,41 +648,81 @@ class TranslationModule(QMainWindow):
         # Clear existing display first
         self.clear_sign_display()
         
-        # Calculate number of rows needed
-        num_images = len(image_paths)
-        num_rows = (num_images + 5) // 6  # Ceiling division for 6 images per row
+        # Create a new row for each word
+        current_row_layout = QHBoxLayout()
+        current_row_layout.setSpacing(5)
+        current_row_layout.setContentsMargins(0, 0, 0, 0)
+        current_row_layout.setAlignment(Qt.AlignLeft)  # Align to the left
         
-        # Create rows
-        for row in range(num_rows):
-            row_layout = QHBoxLayout()
-            row_layout.setSpacing(5)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-            
-            # Add images to this row (max 6)
-            start_idx = row * 6
-            end_idx = min(start_idx + 6, num_images)
-            
-            for i in range(start_idx, end_idx):
-                image_path = image_paths[i]
-                print(f"Loading image: {image_path}")
-                image_label = QLabel()
-                pixmap = QPixmap(image_path)
-                if pixmap.isNull():
-                    print(f"Failed to load image: {image_path}")
-                    continue
-                # Scale the image to a larger size
-                scaled_pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                image_label.setPixmap(scaled_pixmap)
-                image_label.setAlignment(Qt.AlignCenter)
-                image_label.setMinimumSize(120, 120)
-                row_layout.addWidget(image_label)
-            
-            # Add the row to the main layout
-            self.sign_display_layout.addLayout(row_layout)
+        for image_path in image_paths:
+            if image_path is None:  # Word boundary marker
+                # Add the current row to the main layout
+                self.sign_display_layout.addLayout(current_row_layout)
+                # Create a new row for the next word
+                current_row_layout = QHBoxLayout()
+                current_row_layout.setSpacing(5)
+                current_row_layout.setContentsMargins(0, 0, 0, 0)
+                current_row_layout.setAlignment(Qt.AlignLeft)  # Align to the left
+                continue
+                
+            image_label = QLabel()
+            pixmap = QPixmap(image_path)
+            if pixmap.isNull():
+                print(f"Failed to load image: {image_path}")
+                continue
+            # Scale the image to a larger size
+            scaled_pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            image_label.setPixmap(scaled_pixmap)
+            image_label.setAlignment(Qt.AlignLeft)  # Align image to the left
+            image_label.setMinimumSize(120, 120)
+            current_row_layout.addWidget(image_label)
+        
+        # Add the last row if it has any images
+        if current_row_layout.count() > 0:
+            self.sign_display_layout.addLayout(current_row_layout)
         
         # Add stretch at the bottom to push content to the top
         self.sign_display_layout.addStretch()
 
+    def toggle_display_mode(self, state):
+        """Toggle between text and sign language display modes"""
+        self.text_mode = bool(state)
+        self.display_mode_toggle.setText("Text Mode" if self.text_mode else "Sign Mode")
+        
+        # Update the display based on the current mode
+        if self.text_mode:
+            # Show text messages and hide sign language
+            self.chat_box.show()
+            self.sign_display_scroll.hide()
+            self.display_messages()
+        else:
+            # Hide text messages and show sign language
+            self.chat_box.hide()
+            self.sign_display_scroll.show()
+            # Clear and update sign language display for all messages
+            self.update_sign_display_for_all_messages()
+    
+    def update_sign_display_for_all_messages(self):
+        """Update sign language display for all messages"""
+        self.clear_sign_display()
+        
+        # Get all messages from the doctor
+        doctor_messages = [msg["text"] for msg in self.messages if msg["user"] == "Doctor"]
+        
+        if doctor_messages:
+            # Convert all messages to sign language
+            all_sign_images = []
+            for message in doctor_messages:
+                # Split message into words
+                words = message.split()
+                for word in words:
+                    sign_images = self.convert_text_to_sign(word)
+                    all_sign_images.extend(sign_images)
+                    all_sign_images.append(None)  # Add word boundary marker
+            
+            # Display all sign images
+            self.display_sign_images(all_sign_images)
+    
     def send_message(self, user, message):
         if not message.strip():
             return
@@ -625,14 +730,26 @@ class TranslationModule(QMainWindow):
         # Add message to list
         self.messages.append({"user": user, "text": message})
         
-        # If message is from Doctor, convert to sign language
         if user == "Doctor":
-            sign_images = self.convert_text_to_sign(message)
-            self.display_sign_images(sign_images)
+            if not self.text_mode:
+                # In sign mode, only show the latest message
+                self.clear_sign_display()
+                # Split message into words
+                words = message.split()
+                all_sign_images = []
+                for word in words:
+                    sign_images = self.convert_text_to_sign(word)
+                    all_sign_images.extend(sign_images)
+                    all_sign_images.append(None)  # Add word boundary marker
+                self.display_sign_images(all_sign_images)
+            else:
+                # In text mode, just display the messages
+                self.display_messages()
             self.input_user2.clear()
-            
-        # Display messages
-        self.display_messages()
+        else:
+            # For patient messages, only update in text mode
+            if self.text_mode:
+                self.display_messages()
     
     def display_messages(self):
         # Clear the chatbox
@@ -671,7 +788,7 @@ class TranslationModule(QMainWindow):
                     display: inline-block;
                     max-width: 100%;
                     word-wrap: break-word;
-                    font-size: 30px;
+                    font-size: 40px;  /* Increased from 14px */
                     line-height: 1.4;
                     position: relative;
                 }
@@ -690,7 +807,7 @@ class TranslationModule(QMainWindow):
                 .message-sender {
                     font-weight: bold;
                     margin-bottom: 2px;
-                    font-size: 20px;
+                    font-size: 16px;  /* Increased from 14px */
                     padding-left: 8px;
                     padding-right: 8px;
                     text-align: left;
@@ -863,6 +980,20 @@ class TranslationModule(QMainWindow):
         if self.video_thread is not None:
             self.video_thread.stop()
         super().closeEvent(event)
+
+    def clear_chat(self):
+        """Clear all chat messages and sign language display"""
+        # Clear messages list
+        self.messages = []
+        
+        # Clear chat box
+        self.chat_box.clear()
+        
+        # Clear sign language display
+        self.clear_sign_display()
+        
+        # Clear translation box
+        self.translation_box.clear()
 
 
 if __name__ == "__main__":
