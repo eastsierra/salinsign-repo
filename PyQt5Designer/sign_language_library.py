@@ -13,7 +13,7 @@ class RoundedItemFrame(QFrame):
     """Custom rounded frame for catalog items"""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.radius = 12
+        self.radius = 15  # Increased radius for more modern look
         self.setMinimumSize(180, 200)
         self.setMaximumSize(220, 240)  # Set maximum size for consistency
         
@@ -28,6 +28,12 @@ class RoundedItemFrame(QFrame):
         
         painter.setClipPath(path)
         painter.fillRect(0, 0, self.width(), self.height(), self.palette().color(self.backgroundRole()))
+        
+        # Add subtle border
+        pen = QPen(QColor(0, 0, 0, 20))  # Very light border
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.drawPath(path)
 
 class CatalogItem(QWidget):
     """Widget for individual catalog items"""
@@ -47,8 +53,10 @@ class CatalogItem(QWidget):
         # Container with shadow
         self.container = RoundedItemFrame()
         self.container.setStyleSheet(f"""
-            background-color: {self.color_scheme['item_bg']};
-            border: none;
+            QFrame {{
+                background-color: {self.color_scheme['item_bg']};
+                border: none;
+            }}
         """)
         self.container.setAutoFillBackground(True)
         
@@ -63,19 +71,40 @@ class CatalogItem(QWidget):
         container_layout.setContentsMargins(10, 10, 10, 10)
         container_layout.setSpacing(5)
         
+        # Image container with fixed size and white background
+        image_container = QFrame()
+        image_container.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 12px;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+            }
+        """)
+        image_container.setFixedSize(160, 160)
+        
         # Image label with fixed size for uniform grid
         self.image_label = QLabel()
-        self.image_label.setFixedSize(160, 160)
+        self.image_label.setFixedSize(150, 150)
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setStyleSheet("background-color: white; border-radius: 8px;")
+        self.image_label.setStyleSheet("""
+            QLabel {
+                background-color: transparent;
+                border-radius: 10px;
+            }
+        """)
         
         # Load and scale the image
         pixmap = QPixmap(self.image_path)
         if not pixmap.isNull():
-            scaled_pixmap = pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            scaled_pixmap = pixmap.scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             self.image_label.setPixmap(scaled_pixmap)
         else:
             self.image_label.setText("Image not found")
+        
+        # Center the image in its container
+        image_layout = QVBoxLayout(image_container)
+        image_layout.setContentsMargins(0, 0, 0, 0)
+        image_layout.addWidget(self.image_label, 0, Qt.AlignCenter)
         
         # Title label with fixed height
         self.title_label = QLabel(self.title)
@@ -87,14 +116,48 @@ class CatalogItem(QWidget):
             font-size: 12px;
         """)
         
-        container_layout.addWidget(self.image_label)
+        container_layout.addWidget(image_container, 0, Qt.AlignCenter)
         container_layout.addWidget(self.title_label)
         
         layout.addWidget(self.container)
         
         # Make the item clickable
         self.setCursor(Qt.PointingHandCursor)
-    
+        
+        # Set tooltip
+        self.setToolTip(f"Click to view details of {self.title}")
+        
+        # Add hover effect
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: transparent;
+            }}
+            QWidget:hover {{
+                background-color: {self.color_scheme['item_hover']};
+                border-radius: 15px;
+            }}
+        """)
+        
+    def enterEvent(self, event):
+        """Handle mouse enter event"""
+        # Scale up the container slightly
+        self.container.setGraphicsEffect(QGraphicsDropShadowEffect(
+            blurRadius=20,
+            color=QColor(0, 0, 0, 60),
+            offset=QPoint(0, 3)
+        ))
+        super().enterEvent(event)
+        
+    def leaveEvent(self, event):
+        """Handle mouse leave event"""
+        # Restore original shadow
+        self.container.setGraphicsEffect(QGraphicsDropShadowEffect(
+            blurRadius=15,
+            color=QColor(0, 0, 0, 40),
+            offset=QPoint(0, 2)
+        ))
+        super().leaveEvent(event)
+        
     def mousePressEvent(self, event):
         """Handle mouse press to show detail dialog"""
         if event.button() == Qt.LeftButton:
@@ -218,7 +281,11 @@ class DetailDialog(QDialog):
                 Qt.KeepAspectRatio, 
                 Qt.SmoothTransformation
             )
+            # Center the pixmap in the label
             image_label.setPixmap(scaled_pixmap)
+            image_label.setAlignment(Qt.AlignCenter)
+            # Add padding to center the image
+            image_label.setContentsMargins(10, 10, 10, 10)
         else:
             image_label.setText("Image not found")
             image_label.setStyleSheet("color: #333; font-size: 16px;")
@@ -415,7 +482,7 @@ class SignLanguageLibrary(QMainWindow):
         
         # Back button with icon
         back_button = QPushButton()
-        back_icon = QIcon("images/backbutton.png")
+        back_icon = QIcon("PyQt5Designer/images/backbutton.png")
         back_button.setIcon(back_icon)
         back_button.setIconSize(QSize(40, 40))
         back_button.setStyleSheet(f"""
@@ -437,7 +504,7 @@ class SignLanguageLibrary(QMainWindow):
         
         # Title with logo
         title_label = QLabel()
-        title_pixmap = QPixmap("images/signlibrary.png")
+        title_pixmap = QPixmap("PyQt5Designer/images/signlibrary.png")
         title_label.setPixmap(title_pixmap)
         title_label.setAlignment(Qt.AlignCenter)
         
@@ -506,13 +573,24 @@ class SignLanguageLibrary(QMainWindow):
         self.search_input.setPlaceholderText("Search sign language...")
         self.search_input.setMinimumWidth(300)
         
-        # Category filter dropdown
-        self.category_filter = QComboBox()
-        self.category_filter.addItem("All Categories")
-        self.category_filter.addItem("Medical")
-        self.category_filter.addItem("Greetings")
-        self.category_filter.addItem("Alphabet")
-        self.category_filter.addItem("Numbers")
+        # Clear button (X)
+        clear_search_button = QPushButton("×")
+        clear_search_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #666;
+                font-size: 18px;
+                font-weight: bold;
+                border: none;
+                padding: 5px;
+                margin-right: 5px;
+            }
+            QPushButton:hover {
+                color: #333;
+            }
+        """)
+        clear_search_button.setFixedSize(30, 30)
+        clear_search_button.clicked.connect(self.clear_search)
         
         # Search button
         search_button = QPushButton("Search")
@@ -521,7 +599,7 @@ class SignLanguageLibrary(QMainWindow):
         # Add search elements to layout
         search_layout.addWidget(search_icon_label)
         search_layout.addWidget(self.search_input)
-        search_layout.addWidget(self.category_filter)
+        search_layout.addWidget(clear_search_button)
         search_layout.addWidget(search_button)
         
         # Add search container to main layout
@@ -671,7 +749,7 @@ class SignLanguageLibrary(QMainWindow):
         
         # Main layout
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setContentsMargins(0, 0, 0, 0)  # Remove outer margins
         
         # Create a scroll area for the grid
         scroll_area = QScrollArea()
@@ -683,30 +761,37 @@ class SignLanguageLibrary(QMainWindow):
         content = QWidget()
         content.setStyleSheet(f"background-color: {color_scheme['primary']};")
         
-        # Grid layout for items
-        grid = QGridLayout(content)
-        grid.setContentsMargins(10, 10, 10, 10)
-        grid.setSpacing(20)  # Increased spacing for better visual consistency
-        
-        # Create catalog items and add to grid
-        row, col = 0, 0
-        max_cols = 4  # 4 items per row
+        # Main vertical layout for rows
+        main_layout = QVBoxLayout(content)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(15)
         
         # Store items for search functionality
         if category not in self.all_items:
             self.all_items[category] = []
-            
+        
+        # Calculate items per row based on window width
+        # Assuming minimum item width of 180px and spacing of 15px
+        window_width = self.width()
+        min_item_width = 180
+        spacing = 15
+        items_per_row = max(3, min(6, (window_width - 40) // (min_item_width + spacing)))
+        
+        # Create rows of items
+        current_row = []
+        row_layout = None
+        
         for item_text in items:
             # Determine image path based on the item type
             if "Letter" in item_text:
                 letter_value = item_text.split()[-1].lower()
-                image_path = f"images/letter_{letter_value}.png"
+                image_path = f"PyQt5Designer/images/letter_{letter_value}.png"
             elif "Number" in item_text:
                 number_value = item_text.split()[-1]
-                image_path = f"images/number_{number_value}.png"
+                image_path = f"PyQt5Designer/images/number_{number_value}.png"
             else:
                 filename = item_text.lower().replace(' ', '_').replace('?', '').replace('!', '')
-                image_path = f"images/{category.lower()}_{filename}.png"
+                image_path = f"PyQt5Designer/images/{category.lower()}_{filename}.png"
             
             # Store item info for search
             self.all_items[category].append({
@@ -719,25 +804,39 @@ class SignLanguageLibrary(QMainWindow):
             # Create catalog item
             catalog_item = CatalogItem(item_text, image_path, color_scheme, category)
             
+            # Calculate item size based on items per row
+            item_width = (window_width - 40 - (items_per_row - 1) * spacing) // items_per_row
+            item_height = int(item_width * 1.1)  # Maintain aspect ratio
+            
             # Set fixed size for uniform grid
-            catalog_item.setFixedSize(200, 220)
+            catalog_item.setFixedSize(item_width, item_height)
             
-            # Add to grid
-            grid.addWidget(catalog_item, row, col)
+            # Add to current row
+            current_row.append(catalog_item)
             
-            # Update row and column
-            col += 1
-            if col >= max_cols:
-                col = 0
-                row += 1
-        
-        # Add empty widgets to fill the grid
-        while col > 0 and col < max_cols:
-            spacer = QWidget()
-            spacer.setFixedSize(200, 220)  # Same size as catalog items
-            spacer.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            grid.addWidget(spacer, row, col)
-            col += 1
+            # If row is full or this is the last item, create a new row
+            if len(current_row) == items_per_row or item_text == items[-1]:
+                # Create new row layout
+                row_layout = QHBoxLayout()
+                row_layout.setSpacing(spacing)
+                row_layout.setContentsMargins(0, 0, 0, 0)
+                
+                # Add items to row
+                for item in current_row:
+                    row_layout.addWidget(item)
+                
+                # If this is the last row and it's not full, add spacers to fill the row
+                if len(current_row) < items_per_row and item_text == items[-1]:
+                    for _ in range(items_per_row - len(current_row)):
+                        spacer = QWidget()
+                        spacer.setFixedSize(item_width, item_height)
+                        row_layout.addWidget(spacer)
+                
+                # Add row to main layout
+                main_layout.addLayout(row_layout)
+                
+                # Clear current row
+                current_row = []
         
         # Set scroll content
         scroll_area.setWidget(content)
@@ -877,7 +976,6 @@ class SignLanguageLibrary(QMainWindow):
     def perform_search(self):
         """Search for items across all categories"""
         query = self.search_input.text().lower().strip()
-        selected_category = self.category_filter.currentText()
         
         # If query is empty, do nothing
         if not query:
@@ -885,16 +983,15 @@ class SignLanguageLibrary(QMainWindow):
         
         results = []
         
-        # Search across all categories or filter by selected category
+        # Search across all categories
         for category, items in self.all_items.items():
-            if selected_category == "All Categories" or selected_category == category:
-                for item in items:
-                    # Check if query is in the item title
-                    if query in item['title'].lower():
-                        # Add category info to the item
-                        item_copy = item.copy()
-                        item_copy['category'] = category
-                        results.append(item_copy)
+            for item in items:
+                # Check if query is in the item title
+                if query in item['title'].lower():
+                    # Add category info to the item
+                    item_copy = item.copy()
+                    item_copy['category'] = category
+                    results.append(item_copy)
         
         # Sort results alphabetically
         results.sort(key=lambda x: x['title'])
@@ -927,8 +1024,6 @@ class SignLanguageLibrary(QMainWindow):
                 self.colors["primary"]  # Color for search results tab
             ]
             custom_tab_bar.set_tab_colors(tab_colors)
-
-    
 
     def clear_search(self):
         """Clear search and remove search results tab"""
@@ -985,6 +1080,16 @@ class SignLanguageLibrary(QMainWindow):
             self.main_window.show()
         except ImportError:
             pass
+
+    def resizeEvent(self, event):
+        """Handle window resize to update item sizes"""
+        super().resizeEvent(event)
+        # Update all catalog tabs when window is resized
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            if hasattr(tab, 'layout'):
+                # Force layout update
+                tab.layout().update()
 
 # Main application entry point
 def main():
