@@ -300,7 +300,10 @@ class Ui_MainWindow(object):
         self.window.hide()  # Hide the main menu window using the saved reference
         
     def open_tutorial(self):
-        # Placeholder for Tutorial functionality
+        from Help import HelpModule
+        self.help_window = HelpModule()
+        self.help_window.showFullScreen()  # Make window full screen
+        self.window.hide()  # Hide the main menu window using the saved reference
         pass
 
 if __name__ == "__main__":
