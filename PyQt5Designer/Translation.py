@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit,
-                           QScrollArea, QSizePolicy, QFrame, QCheckBox)
+                           QScrollArea, QSizePolicy, QFrame, QCheckBox, QDialog)
 from PyQt5.QtCore import Qt, QSize, QUrl, QThread, pyqtSignal, QByteArray, QTime, QTimer
 from PyQt5.QtGui import QPixmap, QCursor, QFont, QImage
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
@@ -189,12 +189,340 @@ class SignLanguageThread(QThread):
         self.running = False
         self.wait()
 
+class PopupWindow(QDialog):
+    def __init__(self, parent=None, content="", popup_type="first", image_path=None):
+        super().__init__(parent)
+        self.setWindowTitle("")  # Remove window title
+        self.setFixedSize(800, 650)  # Make popup bigger (increased from 600x500)
+        self.setStyleSheet("background-color: white;")
+        
+        # Main layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for image to span the whole popup
+        
+        # Content - either image or text
+        if image_path:
+            content_label = QLabel()
+            pixmap = QPixmap(image_path)
+            content_label.setPixmap(pixmap.scaled(800, 550, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            content_label.setAlignment(Qt.AlignCenter)
+            content_label.setStyleSheet("padding: 0px;")
+        else:
+            content_label = QLabel(content)
+            content_label.setWordWrap(True)
+            content_label.setStyleSheet("font-size: 18px; padding: 30px;")
+        
+        layout.addWidget(content_label)
+        
+        # Add spacer
+        layout.addStretch()
+        
+        # Button layout
+        button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(20, 0, 20, 20)  # Add some padding around the button
+        
+        if popup_type == "first":
+            next_button = QPushButton("Let's Get Started")
+            next_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 10px 20px;
+                    font-size: 14px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+            """)
+            next_button.clicked.connect(self.show_next_popup)
+            button_layout.addWidget(next_button)
+        elif popup_type == "second":
+            # Create Patient button
+            patient_button = QPushButton("Patient")
+            patient_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 10px 20px;
+                    font-size: 14px;
+                    font-weight: bold;
+                    margin: 0 10px;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+            """)
+            patient_button.clicked.connect(self.show_patient_popup1)
+            button_layout.addWidget(patient_button)
+            
+            # Create Doctor button
+            doctor_button = QPushButton("Doctor")
+            doctor_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 10px 20px;
+                    font-size: 14px;
+                    font-weight: bold;
+                    margin: 0 10px;
+                }
+                QPushButton:hover {
+                    background-color: #0b7dda;
+                }
+            """)
+            doctor_button.clicked.connect(self.show_doctor_popup1)
+            button_layout.addWidget(doctor_button)
+        elif popup_type == "final_shared":
+            # User Guide button
+            guide_button = QPushButton("User Guide")
+            guide_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 10px 20px;
+                    font-size: 14px;
+                    font-weight: bold;
+                    margin: 0 10px;
+                }
+                QPushButton:hover {
+                    background-color: #0b7dda;
+                }
+            """)
+            guide_button.clicked.connect(self.open_user_guide)
+            button_layout.addWidget(guide_button)
+            
+            # Close button
+            close_button = QPushButton("Close")
+            close_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    padding: 10px 20px;
+                    font-size: 14px;
+                    font-weight: bold;
+                    margin: 0 10px;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+            """)
+            close_button.clicked.connect(self.accept)
+            button_layout.addWidget(close_button)
+        else:
+            # For all tutorial popups (patient1-5, doctor1-5)
+            if "patient" in popup_type or "doctor" in popup_type:
+                button_text = "Next"
+                if popup_type.endswith("5"):  # Last popup in sequence
+                    button_text = "Got it!"
+                    
+                next_button = QPushButton(button_text)
+                next_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4CAF50;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        padding: 10px 20px;
+                        font-size: 14px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #45a049;
+                    }
+                """)
+                
+                # Connect to the appropriate next function based on the popup type
+                if popup_type == "patient1":
+                    next_button.clicked.connect(self.show_patient_popup2)
+                elif popup_type == "patient2":
+                    next_button.clicked.connect(self.show_patient_popup3)
+                elif popup_type == "patient3":
+                    next_button.clicked.connect(self.show_patient_popup4)
+                elif popup_type == "patient4":
+                    next_button.clicked.connect(self.show_patient_popup5)
+                elif popup_type == "patient5":
+                    next_button.clicked.connect(self.show_final_shared_popup)
+                elif popup_type == "doctor1":
+                    next_button.clicked.connect(self.show_doctor_popup2)
+                elif popup_type == "doctor2":
+                    next_button.clicked.connect(self.show_doctor_popup3)
+                elif popup_type == "doctor3":
+                    next_button.clicked.connect(self.show_doctor_popup4)
+                elif popup_type == "doctor4":
+                    next_button.clicked.connect(self.show_doctor_popup5)
+                elif popup_type == "doctor5":
+                    next_button.clicked.connect(self.show_final_shared_popup)
+                
+                button_layout.addWidget(next_button)
+            else:
+                # For any other popups
+                close_button = QPushButton("Got it!")
+                close_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #4CAF50;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        padding: 10px 20px;
+                        font-size: 14px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #45a049;
+                    }
+                """)
+                close_button.clicked.connect(self.accept)
+                button_layout.addWidget(close_button)
+        
+        layout.addLayout(button_layout)
+    
+    def open_user_guide(self):
+        # This would open a user guide - for now just accept the dialog
+        # Could be implemented to open a PDF or another window with help content
+        self.accept()
+    
+    def show_final_shared_popup(self):
+        self.accept()  # Close current popup
+        final_popup = PopupWindow(
+            self.parent(),
+            "",  # No text content needed since we're using an image
+            "final_shared",
+            "images/helpassets/both/seemorepopup.png"  # Path to the final shared popup image
+        )
+        final_popup.exec_()
+    
+    def show_next_popup(self):
+        self.accept()  # Close current popup
+        second_popup = PopupWindow(
+            self.parent(),
+            "",  # No text content needed since we're using an image
+            "second",
+            "images/helpassets/both/beforepopup.png"  # Path to the image for role selection popup
+        )
+        second_popup.exec_()
+    
+    # Patient tutorial sequence
+    def show_patient_popup1(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "patient1",
+            "images/helpassets/patient/patientpopup1.png"
+        )
+        popup.exec_()
+        
+    def show_patient_popup2(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "patient2",
+            "images/helpassets/patient/patientpopup2.png"
+        )
+        popup.exec_()
+        
+    def show_patient_popup3(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "patient3",
+            "images/helpassets/patient/patientpopup3.png"
+        )
+        popup.exec_()
+        
+    def show_patient_popup4(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "patient4",
+            "images/helpassets/patient/patientpopup4.png"
+        )
+        popup.exec_()
+        
+    def show_patient_popup5(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "patient5",
+            "images/helpassets/patient/patientpopup5.png"
+        )
+        popup.exec_()
+    
+    # Doctor tutorial sequence
+    def show_doctor_popup1(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "doctor1",
+            "images/helpassets/doctor/doctorpopup1.png"
+        )
+        popup.exec_()
+        
+    def show_doctor_popup2(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "doctor2",
+            "images/helpassets/doctor/doctorpopup2.png"
+        )
+        popup.exec_()
+        
+    def show_doctor_popup3(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "doctor3",
+            "images/helpassets/doctor/doctorpopup3.png"
+        )
+        popup.exec_()
+        
+    def show_doctor_popup4(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "doctor4",
+            "images/helpassets/doctor/doctorpopup4.png"
+        )
+        popup.exec_()
+        
+    def show_doctor_popup5(self):
+        self.accept()  # Close current popup
+        popup = PopupWindow(
+            self.parent(),
+            "",  # No text needed since we're using images
+            "doctor5",
+            "images/helpassets/doctor/doctorpopup5.png"
+        )
+        popup.exec_()
+
 class TranslationModule(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SalinSign Translation Module")
         self.setGeometry(0, 0, 1920, 1080)
         self.setMinimumSize(360, 640)  # Set minimum size for mobile compatibility
+        
+        # Preloading flag - if True, don't start video yet
+        self.preloaded = False
         
         # Set white background for the main window
         self.setStyleSheet("background-color: white;")
@@ -270,7 +598,18 @@ class TranslationModule(QMainWindow):
         self.back_button.setCursor(QCursor(Qt.PointingHandCursor))
         self.back_button.mousePressEvent = self.go_back
         button_header.addWidget(self.back_button, alignment=Qt.AlignLeft)
+        
+        # Add stretch to push the tooltip button to the right
         button_header.addStretch()
+        
+        # Add tooltip button to the right
+        self.tooltip_button = QLabel()
+        self.tooltip_button.setObjectName("tooltipButton")
+        self.tooltip_button.setPixmap(QPixmap("images/tooltip.png").scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.tooltip_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.tooltip_button.mousePressEvent = self.show_tooltip
+        button_header.addWidget(self.tooltip_button, alignment=Qt.AlignRight)
+        
         self.main_layout.addLayout(button_header)
         
         # Header Image Layout
@@ -764,7 +1103,7 @@ class TranslationModule(QMainWindow):
                     margin: 0;
                     padding: 0;
                     font-family: Arial, sans-serif;
-                    background-color: #f0f2f5;
+                    background-color: white;
                 }
                 .message-row {
                     width: 100%;
@@ -788,18 +1127,20 @@ class TranslationModule(QMainWindow):
                     display: inline-block;
                     max-width: 100%;
                     word-wrap: break-word;
-                    font-size: 40px;  /* Increased from 14px */
+                    font-size: 28px;  /* Increased from 14px */
                     line-height: 1.4;
                     position: relative;
                 }
                 .patient-bubble {
-                    background-color: #f0f2f5;
+                    background-color: white;
+                    border: 1px solid #e0e0e0;
                     color: #333;
                     border-bottom-left-radius: 5px;
                     margin-left: 5px;
                 }
                 .doctor-bubble {
-                    background-color: #f0f2f5;
+                    background-color: white;
+                    border: 1px solid #e0e0e0;
                     color: #333;
                     border-bottom-right-radius: 5px;
                     margin-right: 5px;
@@ -882,28 +1223,36 @@ class TranslationModule(QMainWindow):
         self.chat_box.setTextCursor(cursor)
     
     def go_back(self, event):
-        # Import the main menu and return to it
-        from MainMenu import Ui_MainWindow
-        
-        # Clean up video thread if it exists
+        """Return to the main menu when the back button is clicked"""
+        # First, stop video processing to free up resources
+        if self.sign_language_thread is not None:
+            self.sign_language_thread.stop()
+            self.sign_language_thread = None
+            
         if self.video_thread is not None:
             self.video_thread.stop()
-            
-        # Close current window
-        self.close()
+            self.video_thread = None
+
+        # Hide current window instead of closing it
+        # This avoids the overhead of destroying and recreating the window
+        self.hide()
         
-        # Show the main menu window again
-        # Get the instance that was created in __main__
+        # Find and show the main menu window
         for widget in QApplication.topLevelWidgets():
-            if isinstance(widget, QMainWindow) and widget != self:
+            if widget != self and isinstance(widget, QMainWindow):
+                # Show the main menu
                 widget.show()
+                
+                # Update UI immediately to make transition feel instant
+                QApplication.processEvents()
                 return
-        
-        # If no existing main window is found, create a new one
-        self.main_window = QMainWindow()
-        self.ui = Ui_MainWindow()
-        self.ui.setupUi(self.main_window)
-        self.main_window.show()
+                
+        # If no existing main window is found (unlikely), create a new one
+        from MainMenu import Ui_MainWindow
+        main_window = QMainWindow()
+        ui = Ui_MainWindow()
+        ui.setupUi(main_window)
+        main_window.show()
     
     def update_video_frame(self, image):
         """Update the video placeholder with a new frame"""
@@ -971,7 +1320,25 @@ class TranslationModule(QMainWindow):
     def showEvent(self, event):
         """Start video streaming when the window is shown"""
         super().showEvent(event)
-        self.setup_video_stream()
+        
+        # Only start video stream if not preloaded
+        if not self.preloaded:
+            # Use a small delay to let the UI render first
+            QTimer.singleShot(100, self.setup_video_stream)
+            
+            # Show a loading message while camera initializes
+            self.video_placeholder.setText("Initializing camera...")
+            self.video_placeholder.setStyleSheet("""
+                QLabel {
+                    background-color: #000;
+                    color: #fff;
+                    font-size: 18px;
+                    qproperty-alignment: AlignCenter;
+                }
+            """)
+            
+            # Update UI immediately
+            QApplication.processEvents()
     
     def closeEvent(self, event):
         """Clean up resources when closing the window"""
@@ -995,9 +1362,18 @@ class TranslationModule(QMainWindow):
         # Clear translation box
         self.translation_box.clear()
 
+    def show_tooltip(self, event):
+        """Show the tooltip popup window when tooltip button is clicked"""
+        popup = PopupWindow(
+            self,
+            "",  # No text content needed since we're using an image
+            "first",
+            "images/helpassets/both/welcomepopup.png"  # Path to the welcome image
+        )
+        popup.exec_()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = TranslationModule()
-    window.show()
+    window.showFullScreen()  # Show in fullscreen mode
     sys.exit(app.exec_())

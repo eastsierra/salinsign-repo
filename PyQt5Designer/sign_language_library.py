@@ -396,8 +396,12 @@ class CustomTabBar(QTabBar):
 class SignLanguageLibrary(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Sign Language Catalog")
-        self.setMinimumSize(1000, 700)  # Increased height for search bar
+        # Set up window properties
+        self.setWindowTitle("Sign Language Library")
+        self.setGeometry(100, 100, 1920, 1080)
+        self.setMinimumSize(600, 400)
+        # Set window to fullscreen
+        self.showFullScreen()
         
         # Set app-wide font
         font = QFont("Segoe UI", 10)
@@ -1085,11 +1089,12 @@ class SignLanguageLibrary(QMainWindow):
         """Handle window resize to update item sizes"""
         super().resizeEvent(event)
         # Update all catalog tabs when window is resized
-        for i in range(self.tab_widget.count()):
-            tab = self.tab_widget.widget(i)
-            if hasattr(tab, 'layout'):
-                # Force layout update
-                tab.layout().update()
+        if hasattr(self, 'tab_widget') and self.tab_widget is not None:
+            for i in range(self.tab_widget.count()):
+                tab = self.tab_widget.widget(i)
+                if hasattr(tab, 'layout'):
+                    # Force layout update
+                    tab.layout().update()
 
 # Main application entry point
 def main():

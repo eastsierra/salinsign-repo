@@ -18,6 +18,8 @@ class HelpModule(QMainWindow):
         self.setWindowTitle("Help Module")
         self.setGeometry(100, 100, 800, 600)
         self.setStyleSheet("background-color: #f8f9fa;")
+        # Set window to fullscreen
+        self.showFullScreen()
         
         self.setup_ui()
 

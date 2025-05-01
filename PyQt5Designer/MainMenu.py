@@ -13,6 +13,15 @@ class Ui_MainWindow(object):
         MainWindow.setFont(font)
         MainWindow.setAcceptDrops(False)
         MainWindow.setTabShape(QtWidgets.QTabWidget.Rounded)
+        # Set window to fullscreen
+        MainWindow.showFullScreen()
+        
+        # Save reference to MainWindow for later use
+        self.window = MainWindow
+        
+        # Preload Translation module in background
+        self.translation_window = None
+        QtCore.QTimer.singleShot(100, self.preload_translation_module)
         
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setStyleSheet("background-color: rgb(255, 255, 255);")
@@ -42,29 +51,6 @@ class Ui_MainWindow(object):
         self.SignLibraryButton.setIconSize(QtCore.QSize(200, 130))
         self.SignLibraryButton.setObjectName("SignLibraryButton")
         
-        self.HelpButton = QtWidgets.QPushButton(self.centralwidget)
-        self.HelpButton.setGeometry(QtCore.QRect(824, 690, 271, 51))
-        font = QtGui.QFont()
-        font.setPointSize(18)
-        self.HelpButton.setFont(font)
-        self.HelpButton.setStyleSheet("""
-            QPushButton {
-                border-radius: 25px;
-                border: none;
-                background-color: #97cee8;
-                color: black;
-            }
-            QPushButton:hover {
-                background-color: #a2defa;
-            }
-        """)
-        self.HelpButton.setText("")
-        icon1 = QtGui.QIcon()
-        icon1.addPixmap(QtGui.QPixmap("images/HelpButtonIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.HelpButton.setIcon(icon1)
-        self.HelpButton.setIconSize(QtCore.QSize(200, 130))
-        self.HelpButton.setObjectName("HelpButton")
-        
         self.TranslationButton = QtWidgets.QPushButton(self.centralwidget)
         self.TranslationButton.setGeometry(QtCore.QRect(824, 550, 271, 51))
         font = QtGui.QFont()
@@ -89,6 +75,30 @@ class Ui_MainWindow(object):
         self.TranslationButton.setIcon(icon2)
         self.TranslationButton.setIconSize(QtCore.QSize(200, 130))
         self.TranslationButton.setObjectName("TranslationButton")
+        
+        # Add User Guide Button - adjust Y position to be after Sign Library button
+        self.UserGuideButton = QtWidgets.QPushButton(self.centralwidget)
+        self.UserGuideButton.setGeometry(QtCore.QRect(824, 690, 271, 51))  # Updated Y position
+        font = QtGui.QFont()
+        font.setPointSize(18)
+        self.UserGuideButton.setFont(font)
+        self.UserGuideButton.setStyleSheet("""
+            QPushButton {
+                border-radius: 25px;
+                border: none;
+                background-color: #97cee8;
+                color: black;
+            }
+            QPushButton:hover {
+                background-color: #a2defa;
+            }
+        """)
+        self.UserGuideButton.setText("")
+        icon3 = QtGui.QIcon()
+        icon3.addPixmap(QtGui.QPixmap("images/UserGuideButtonIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.UserGuideButton.setIcon(icon3)
+        self.UserGuideButton.setIconSize(QtCore.QSize(200, 130))
+        self.UserGuideButton.setObjectName("UserGuideButton")
         
         # Create labels with proper scaling settings
         self.label_2 = QtWidgets.QLabel(self.centralwidget)
@@ -134,9 +144,6 @@ class Ui_MainWindow(object):
         
         # Add resize event handler
         MainWindow.resizeEvent = self.handle_resize
-
-        # Save reference to MainWindow for later use
-        self.window = MainWindow
 
     def handle_resize(self, event):
         width = event.size().width()
@@ -193,28 +200,33 @@ class Ui_MainWindow(object):
         logo_center_x = (width - logo_width) // 2
         
         # Update button positions and styles
-        for button in [self.TranslationButton, self.SignLibraryButton, self.HelpButton]:
+        for button in [self.TranslationButton, self.SignLibraryButton, self.UserGuideButton]:
             button.setStyleSheet(button_style)
         
         # Calculate vertical spacing between buttons
         button_spacing = int(70 * scale_factor)
         start_y = int(height * 0.5)  # Start buttons from middle of screen
         
+        # Position buttons with consistent spacing
         self.TranslationButton.setGeometry(QtCore.QRect(
             center_x,
             start_y,
             button_width,
             button_height
         ))
+        
+        # Position Sign Library button immediately after Translation button
         self.SignLibraryButton.setGeometry(QtCore.QRect(
             center_x,
             start_y + button_spacing,
             button_width,
             button_height
         ))
-        self.HelpButton.setGeometry(QtCore.QRect(
+        
+        # Position User Guide button immediately after Sign Library button
+        self.UserGuideButton.setGeometry(QtCore.QRect(
             center_x,
-            start_y + (button_spacing * 2),
+            start_y + (button_spacing * 2),  # Position right after SignLibraryButton
             button_width,
             button_height
         ))
@@ -275,7 +287,7 @@ class Ui_MainWindow(object):
         # Update icon sizes
         icon_width = int(200 * scale_factor)
         icon_height = int(130 * scale_factor)
-        for button in [self.TranslationButton, self.SignLibraryButton, self.HelpButton]:
+        for button in [self.TranslationButton, self.SignLibraryButton, self.UserGuideButton]:
             button.setIconSize(QtCore.QSize(icon_width, icon_height))
 
     def retranslateUi(self, MainWindow):
@@ -285,13 +297,31 @@ class Ui_MainWindow(object):
         # Connect buttons to their respective functions
         self.TranslationButton.clicked.connect(self.open_translation)
         self.SignLibraryButton.clicked.connect(self.open_dictionary)
-        self.HelpButton.clicked.connect(self.open_tutorial)
+        self.UserGuideButton.clicked.connect(self.open_user_guide)
+
+    def preload_translation_module(self):
+        """Preload the Translation module to make navigation faster"""
+        try:
+            from Translation import TranslationModule
+            self.translation_window = TranslationModule()
+            # Don't show it yet, just initialize it
+            # Set flag to prevent video from starting
+            self.translation_window.preloaded = True
+        except Exception as e:
+            print(f"Error preloading Translation module: {e}")
 
     def open_translation(self):
-        from Translation import TranslationModule
-        self.translation_window = TranslationModule()
-        self.translation_window.show()
-        self.window.hide()  # Hide the main menu window using the saved reference
+        # If module is already preloaded, just show it
+        if self.translation_window is not None:
+            self.translation_window.preloaded = False  # Allow normal operation now
+            self.translation_window.showFullScreen()  # Use fullscreen
+            self.window.hide()
+        else:
+            # Fall back to normal loading if preloading failed
+            from Translation import TranslationModule
+            self.translation_window = TranslationModule()
+            self.translation_window.showFullScreen()  # Use fullscreen
+            self.window.hide()
         
     def open_dictionary(self):
         from sign_language_library import SignLanguageLibrary
@@ -299,12 +329,11 @@ class Ui_MainWindow(object):
         self.dictionary_window.showFullScreen()  # Make window full screen
         self.window.hide()  # Hide the main menu window using the saved reference
         
-    def open_tutorial(self):
-        from Help import HelpModule
-        self.help_window = HelpModule()
-        self.help_window.showFullScreen()  # Make window full screen
+    def open_user_guide(self):
+        from UserGuide import UserGuideModule
+        self.user_guide_window = UserGuideModule()
+        self.user_guide_window.showFullScreen()  # Make window full screen
         self.window.hide()  # Hide the main menu window using the saved reference
-        pass
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
