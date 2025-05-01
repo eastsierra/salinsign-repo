@@ -2,148 +2,198 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
 import os
+import gc  # Import garbage collector
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
-        MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1920, 1080)
-        MainWindow.setMinimumSize(360, 640)  # Set minimum size for mobile compatibility
-        font = QtGui.QFont()
-        font.setFamily("Comic Sans MS")
-        MainWindow.setFont(font)
-        MainWindow.setAcceptDrops(False)
-        MainWindow.setTabShape(QtWidgets.QTabWidget.Rounded)
-        # Set window to fullscreen
-        MainWindow.showFullScreen()
-        
-        # Save reference to MainWindow for later use
-        self.window = MainWindow
-        
-        # Preload Translation module in background
-        self.translation_window = None
-        QtCore.QTimer.singleShot(100, self.preload_translation_module)
-        
-        self.centralwidget = QtWidgets.QWidget(MainWindow)
-        self.centralwidget.setStyleSheet("background-color: rgb(255, 255, 255);")
-        self.centralwidget.setObjectName("centralwidget")
-        
-        # Create buttons with original styling
-        self.SignLibraryButton = QtWidgets.QPushButton(self.centralwidget)
-        self.SignLibraryButton.setGeometry(QtCore.QRect(824, 620, 271, 51))
-        font = QtGui.QFont()
-        font.setPointSize(18)
-        self.SignLibraryButton.setFont(font)
-        self.SignLibraryButton.setStyleSheet("""
-            QPushButton {
-                border-radius: 25px;
-                border: none;
-                background-color: #97cee8;
-                color: black;
-            }
-            QPushButton:hover {
-                background-color: #a2defa;
-            }
-        """)
-        self.SignLibraryButton.setText("")
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("images/SignLibraryButtonIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.SignLibraryButton.setIcon(icon)
-        self.SignLibraryButton.setIconSize(QtCore.QSize(200, 130))
-        self.SignLibraryButton.setObjectName("SignLibraryButton")
-        
-        self.TranslationButton = QtWidgets.QPushButton(self.centralwidget)
-        self.TranslationButton.setGeometry(QtCore.QRect(824, 550, 271, 51))
-        font = QtGui.QFont()
-        font.setFamily("Comic Sans MS")
-        font.setPointSize(18)
-        self.TranslationButton.setFont(font)
-        self.TranslationButton.setStyleSheet("""
-            QPushButton {
-                border-radius: 25px;
-                border: none;
-                background-color: #97cee8;
-                color: black;
-                cursor: pointer;
-            }
-            QPushButton:hover {
-                background-color: #a2defa;
-            }
-        """)
-        self.TranslationButton.setText("")
-        icon2 = QtGui.QIcon()
-        icon2.addPixmap(QtGui.QPixmap("images/TranslateButtonIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.TranslationButton.setIcon(icon2)
-        self.TranslationButton.setIconSize(QtCore.QSize(200, 130))
-        self.TranslationButton.setObjectName("TranslationButton")
-        
-        # Add User Guide Button - adjust Y position to be after Sign Library button
-        self.UserGuideButton = QtWidgets.QPushButton(self.centralwidget)
-        self.UserGuideButton.setGeometry(QtCore.QRect(824, 690, 271, 51))  # Updated Y position
-        font = QtGui.QFont()
-        font.setPointSize(18)
-        self.UserGuideButton.setFont(font)
-        self.UserGuideButton.setStyleSheet("""
-            QPushButton {
-                border-radius: 25px;
-                border: none;
-                background-color: #97cee8;
-                color: black;
-            }
-            QPushButton:hover {
-                background-color: #a2defa;
-            }
-        """)
-        self.UserGuideButton.setText("")
-        icon3 = QtGui.QIcon()
-        icon3.addPixmap(QtGui.QPixmap("images/UserGuideButtonIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.UserGuideButton.setIcon(icon3)
-        self.UserGuideButton.setIconSize(QtCore.QSize(200, 130))
-        self.UserGuideButton.setObjectName("UserGuideButton")
-        
-        # Create labels with proper scaling settings
-        self.label_2 = QtWidgets.QLabel(self.centralwidget)
-        self.label_2.setGeometry(QtCore.QRect(-80, 540, 791, 511))
-        self.label_2.setText("")
-        self.label_2.setPixmap(QtGui.QPixmap("images/doctorBottomLeft.png"))
-        self.label_2.setScaledContents(True)
-        self.label_2.setObjectName("label_2")
-        
-        self.label = QtWidgets.QLabel(self.centralwidget)
-        self.label.setGeometry(QtCore.QRect(474, 50, 971, 481))
-        self.label.setText("")
-        self.label.setPixmap(QtGui.QPixmap("images/SalinSignLogo.png"))
-        self.label.setScaledContents(True)
-        self.label.setObjectName("label")
-        
-        self.label_3 = QtWidgets.QLabel(self.centralwidget)
-        self.label_3.setGeometry(QtCore.QRect(1170, 550, 791, 511))
-        self.label_3.setText("")
-        self.label_3.setPixmap(QtGui.QPixmap("images/deafBottomRight.png"))
-        self.label_3.setScaledContents(True)
-        self.label_3.setObjectName("label_3")
-        
-        self.label_4 = QtWidgets.QLabel(self.centralwidget)
-        self.label_4.setGeometry(QtCore.QRect(170, 30, 271, 271))
-        self.label_4.setText("")
-        self.label_4.setPixmap(QtGui.QPixmap("images/CrossUpperLeft.png"))
-        self.label_4.setScaledContents(True)
-        self.label_4.setObjectName("label_4")
-        
-        MainWindow.setCentralWidget(self.centralwidget)
-        self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 1920, 21))
-        self.menubar.setObjectName("menubar")
-        MainWindow.setMenuBar(self.menubar)
-        
-        self.statusbar = QtWidgets.QStatusBar(MainWindow)
-        self.statusbar.setObjectName("statusbar")
-        MainWindow.setStatusBar(self.statusbar)
+        try:
+            MainWindow.setObjectName("MainWindow")
+            MainWindow.resize(1920, 1080)
+            MainWindow.setMinimumSize(360, 640)  # Set minimum size for mobile compatibility
+            font = QtGui.QFont()
+            font.setFamily("Comic Sans MS")
+            MainWindow.setFont(font)
+            MainWindow.setAcceptDrops(False)
+            MainWindow.setTabShape(QtWidgets.QTabWidget.Rounded)
+            # Set window to fullscreen
+            MainWindow.showFullScreen()
+            
+            # Save reference to MainWindow for later use
+            self.window = MainWindow
+            
+            # Initialize module windows to None
+            self.translation_window = None
+            self.dictionary_window = None
+            self.user_guide_window = None
+            
+            # Preload Translation module in background with safety checks
+            QtCore.QTimer.singleShot(500, self.preload_translation_module)
+            
+            self.centralwidget = QtWidgets.QWidget(MainWindow)
+            self.centralwidget.setStyleSheet("background-color: rgb(255, 255, 255);")
+            self.centralwidget.setObjectName("centralwidget")
+            
+            # Create buttons with original styling
+            self.SignLibraryButton = QtWidgets.QPushButton(self.centralwidget)
+            self.SignLibraryButton.setGeometry(QtCore.QRect(824, 620, 271, 51))
+            font = QtGui.QFont()
+            font.setPointSize(18)
+            self.SignLibraryButton.setFont(font)
+            self.SignLibraryButton.setStyleSheet("""
+                QPushButton {
+                    border-radius: 25px;
+                    border: none;
+                    background-color: #97cee8;
+                    color: black;
+                }
+                QPushButton:hover {
+                    background-color: #a2defa;
+                }
+            """)
+            self.SignLibraryButton.setText("")
+            icon = QtGui.QIcon()
+            icon.addPixmap(QtGui.QPixmap("images/SignLibraryButtonIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+            self.SignLibraryButton.setIcon(icon)
+            self.SignLibraryButton.setIconSize(QtCore.QSize(200, 130))
+            self.SignLibraryButton.setObjectName("SignLibraryButton")
+            
+            self.TranslationButton = QtWidgets.QPushButton(self.centralwidget)
+            self.TranslationButton.setGeometry(QtCore.QRect(824, 550, 271, 51))
+            font = QtGui.QFont()
+            font.setFamily("Comic Sans MS")
+            font.setPointSize(18)
+            self.TranslationButton.setFont(font)
+            self.TranslationButton.setStyleSheet("""
+                QPushButton {
+                    border-radius: 25px;
+                    border: none;
+                    background-color: #97cee8;
+                    color: black;
+                    cursor: pointer;
+                }
+                QPushButton:hover {
+                    background-color: #a2defa;
+                }
+            """)
+            self.TranslationButton.setText("")
+            icon2 = QtGui.QIcon()
+            icon2.addPixmap(QtGui.QPixmap("images/TranslateButtonIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+            self.TranslationButton.setIcon(icon2)
+            self.TranslationButton.setIconSize(QtCore.QSize(200, 130))
+            self.TranslationButton.setObjectName("TranslationButton")
+            
+            # Add User Guide Button - adjust Y position to be after Sign Library button
+            self.UserGuideButton = QtWidgets.QPushButton(self.centralwidget)
+            self.UserGuideButton.setGeometry(QtCore.QRect(824, 690, 271, 51))  # Updated Y position
+            font = QtGui.QFont()
+            font.setPointSize(18)
+            self.UserGuideButton.setFont(font)
+            self.UserGuideButton.setStyleSheet("""
+                QPushButton {
+                    border-radius: 25px;
+                    border: none;
+                    background-color: #97cee8;
+                    color: black;
+                }
+                QPushButton:hover {
+                    background-color: #a2defa;
+                }
+            """)
+            self.UserGuideButton.setText("")
+            icon3 = QtGui.QIcon()
+            icon3.addPixmap(QtGui.QPixmap("images/UserGuideButtonIcon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+            self.UserGuideButton.setIcon(icon3)
+            self.UserGuideButton.setIconSize(QtCore.QSize(200, 130))
+            self.UserGuideButton.setObjectName("UserGuideButton")
+            
+            # Create labels with proper scaling settings
+            self.label_2 = QtWidgets.QLabel(self.centralwidget)
+            self.label_2.setGeometry(QtCore.QRect(-80, 540, 791, 511))
+            self.label_2.setText("")
+            self.label_2.setPixmap(QtGui.QPixmap("images/doctorBottomLeft.png"))
+            self.label_2.setScaledContents(True)
+            self.label_2.setObjectName("label_2")
+            
+            self.label = QtWidgets.QLabel(self.centralwidget)
+            self.label.setGeometry(QtCore.QRect(474, 50, 971, 481))
+            self.label.setText("")
+            self.label.setPixmap(QtGui.QPixmap("images/SalinSignLogo.png"))
+            self.label.setScaledContents(True)
+            self.label.setObjectName("label")
+            
+            self.label_3 = QtWidgets.QLabel(self.centralwidget)
+            self.label_3.setGeometry(QtCore.QRect(1170, 550, 791, 511))
+            self.label_3.setText("")
+            self.label_3.setPixmap(QtGui.QPixmap("images/deafBottomRight.png"))
+            self.label_3.setScaledContents(True)
+            self.label_3.setObjectName("label_3")
+            
+            self.label_4 = QtWidgets.QLabel(self.centralwidget)
+            self.label_4.setGeometry(QtCore.QRect(170, 30, 271, 271))
+            self.label_4.setText("")
+            self.label_4.setPixmap(QtGui.QPixmap("images/CrossUpperLeft.png"))
+            self.label_4.setScaledContents(True)
+            self.label_4.setObjectName("label_4")
+            
+            MainWindow.setCentralWidget(self.centralwidget)
+            self.menubar = QtWidgets.QMenuBar(MainWindow)
+            self.menubar.setGeometry(QtCore.QRect(0, 0, 1920, 21))
+            self.menubar.setObjectName("menubar")
+            MainWindow.setMenuBar(self.menubar)
+            
+            self.statusbar = QtWidgets.QStatusBar(MainWindow)
+            self.statusbar.setObjectName("statusbar")
+            MainWindow.setStatusBar(self.statusbar)
 
-        self.retranslateUi(MainWindow)
-        QtCore.QMetaObject.connectSlotsByName(MainWindow)
-        
-        # Add resize event handler
-        MainWindow.resizeEvent = self.handle_resize
+            self.retranslateUi(MainWindow)
+            QtCore.QMetaObject.connectSlotsByName(MainWindow)
+            
+            # Add resize event handler
+            MainWindow.resizeEvent = self.handle_resize
+
+        except Exception as e:
+            print(f"Error during MainMenu setup: {e}")
+            # Create minimal UI if setup fails
+            self.create_fallback_ui(MainWindow)
+
+    def create_fallback_ui(self, MainWindow):
+        """Create a minimal UI if the main setup fails"""
+        try:
+            # Clear any partial setup
+            if hasattr(self, 'centralwidget'):
+                for child in self.centralwidget.children():
+                    child.deleteLater()
+            
+            # Create basic layout
+            self.centralwidget = QtWidgets.QWidget(MainWindow)
+            MainWindow.setCentralWidget(self.centralwidget)
+            layout = QtWidgets.QVBoxLayout(self.centralwidget)
+            
+            # Error message
+            error_label = QtWidgets.QLabel("An error occurred during application startup. Please restart the application.")
+            error_label.setStyleSheet("color: red; font-size: 16px;")
+            layout.addWidget(error_label)
+            
+            # Basic buttons
+            translation_btn = QtWidgets.QPushButton("Translation")
+            translation_btn.clicked.connect(self.open_translation_safe)
+            layout.addWidget(translation_btn)
+            
+            dictionary_btn = QtWidgets.QPushButton("Sign Library")
+            dictionary_btn.clicked.connect(self.open_dictionary_safe)
+            layout.addWidget(dictionary_btn)
+            
+            guide_btn = QtWidgets.QPushButton("User Guide")
+            guide_btn.clicked.connect(self.open_user_guide_safe)
+            layout.addWidget(guide_btn)
+            
+            # Exit button
+            exit_btn = QtWidgets.QPushButton("Exit")
+            exit_btn.clicked.connect(MainWindow.close)
+            layout.addWidget(exit_btn)
+            
+        except Exception as e:
+            print(f"Critical error creating fallback UI: {e}")
 
     def handle_resize(self, event):
         width = event.size().width()
@@ -294,10 +344,14 @@ class Ui_MainWindow(object):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "SalinSign"))
         
-        # Connect buttons to their respective functions
-        self.TranslationButton.clicked.connect(self.open_translation)
-        self.SignLibraryButton.clicked.connect(self.open_dictionary)
-        self.UserGuideButton.clicked.connect(self.open_user_guide)
+        # Set up exception handling for button connections
+        try:
+            # Connect buttons to their respective functions
+            self.TranslationButton.clicked.connect(self.open_translation)
+            self.SignLibraryButton.clicked.connect(self.open_dictionary)
+            self.UserGuideButton.clicked.connect(self.open_user_guide)
+        except Exception as e:
+            print(f"Error connecting button signals: {e}")
 
     def preload_translation_module(self):
         """Preload the Translation module to make navigation faster"""
@@ -309,31 +363,97 @@ class Ui_MainWindow(object):
             self.translation_window.preloaded = True
         except Exception as e:
             print(f"Error preloading Translation module: {e}")
+            # Set to None so we'll create it when needed
+            self.translation_window = None
+
+    def open_translation_safe(self):
+        """Safe wrapper for open_translation"""
+        try:
+            self.open_translation()
+        except Exception as e:
+            print(f"Error opening Translation module: {e}")
+            QtWidgets.QMessageBox.critical(self.window, "Error", 
+                f"Could not open Translation module: {str(e)}")
+
+    def open_dictionary_safe(self):
+        """Safe wrapper for open_dictionary"""
+        try:
+            self.open_dictionary()
+        except Exception as e:
+            print(f"Error opening Sign Library: {e}")
+            QtWidgets.QMessageBox.critical(self.window, "Error", 
+                f"Could not open Sign Library: {str(e)}")
+
+    def open_user_guide_safe(self):
+        """Safe wrapper for open_user_guide"""
+        try:
+            self.open_user_guide()
+        except Exception as e:
+            print(f"Error opening User Guide: {e}")
+            QtWidgets.QMessageBox.critical(self.window, "Error", 
+                f"Could not open User Guide: {str(e)}")
 
     def open_translation(self):
-        # If module is already preloaded, just show it
-        if self.translation_window is not None:
-            self.translation_window.preloaded = False  # Allow normal operation now
-            self.translation_window.showFullScreen()  # Use fullscreen
-            self.window.hide()
-        else:
-            # Fall back to normal loading if preloading failed
-            from Translation import TranslationModule
-            self.translation_window = TranslationModule()
-            self.translation_window.showFullScreen()  # Use fullscreen
-            self.window.hide()
+        # Force garbage collection to free memory
+        gc.collect()
+        
+        try:
+            # If module is already preloaded, just show it
+            if self.translation_window is not None:
+                self.translation_window.preloaded = False  # Allow normal operation now
+                self.translation_window.showFullScreen()  # Use fullscreen
+                self.window.hide()
+            else:
+                # Fall back to normal loading if preloading failed
+                from Translation import TranslationModule
+                self.translation_window = TranslationModule()
+                self.translation_window.showFullScreen()  # Use fullscreen
+                self.window.hide()
+        except Exception as e:
+            print(f"Error in open_translation: {e}")
+            # Show error message
+            QtWidgets.QMessageBox.critical(self.window, "Error", 
+                f"Could not open Translation module: {str(e)}")
         
     def open_dictionary(self):
-        from sign_language_library import SignLanguageLibrary
-        self.dictionary_window = SignLanguageLibrary()
-        self.dictionary_window.showFullScreen()  # Make window full screen
-        self.window.hide()  # Hide the main menu window using the saved reference
+        # Force garbage collection to free memory
+        gc.collect()
+        
+        try:
+            # Clean up existing window if it exists
+            if self.dictionary_window is not None:
+                self.dictionary_window.close()
+                self.dictionary_window = None
+                
+            from sign_language_library import SignLanguageLibrary
+            self.dictionary_window = SignLanguageLibrary()
+            self.dictionary_window.showFullScreen()  # Make window full screen
+            self.window.hide()  # Hide the main menu window using the saved reference
+        except Exception as e:
+            print(f"Error in open_dictionary: {e}")
+            # Show error message
+            QtWidgets.QMessageBox.critical(self.window, "Error", 
+                f"Could not open Sign Library: {str(e)}")
         
     def open_user_guide(self):
-        from UserGuide import UserGuideModule
-        self.user_guide_window = UserGuideModule()
-        self.user_guide_window.showFullScreen()  # Make window full screen
-        self.window.hide()  # Hide the main menu window using the saved reference
+        # Force garbage collection to free memory
+        gc.collect()
+        
+        try:
+            # Clean up existing window if it exists
+            if self.user_guide_window is not None:
+                self.user_guide_window.close()
+                self.user_guide_window = None
+                
+            from UserGuide import UserGuideModule
+            self.user_guide_window = UserGuideModule()
+            self.user_guide_window.showFullScreen()  # Make window full screen
+            self.window.hide()  # Hide the main menu window using the saved reference
+        except Exception as e:
+            print(f"Error in open_user_guide: {e}")
+            # Show error message
+            QtWidgets.QMessageBox.critical(self.window, "Error", 
+                f"Could not open User Guide: {str(e)}")
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)

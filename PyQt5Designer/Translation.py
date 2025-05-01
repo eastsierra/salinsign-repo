@@ -56,9 +56,12 @@ class SignLanguageThread(QThread):
     def __init__(self):
         super().__init__()
         self.running = True
-        self.model_dict = pickle.load(open('./model.p', 'rb'))
-        self.model = self.model_dict['model']
-        self.labels_dict = {0: 'Pain', 1: 'Sick', 2: 'Headache', 3: 'Dizzy', 4: 'Vomit', 5: 'Diarrhea', 6: 'Cough', 7: 'Allergy', 
+        
+        # Load model in try-except block to catch any exceptions
+        try:
+            self.model_dict = pickle.load(open('./model.p', 'rb'))
+            self.model = self.model_dict['model']
+            self.labels_dict = {0: 'Pain', 1: 'Sick', 2: 'Headache', 3: 'Dizzy', 4: 'Vomit', 5: 'Diarrhea', 6: 'Cough', 7: 'Allergy', 
                            8: 'Strong', 9: 'Weak', 10: 'Stomachache', 11: 'Sore Throat', 12: 'Sore Throat', 13: 'Injury', 
                            14: 'Breathing Difficulty', 15: 'Food Poisoning', 16: 'Wound', 17: 'Stress',
                            18: 'Conditions', 19: 'Fever', 20: 'Diabetes', 21: 'Back Pain', 22: 'Back Pain', 23: 'Colds', 24: 'Stroke',
@@ -66,128 +69,153 @@ class SignLanguageThread(QThread):
                            36: 'J', 37: 'K', 38: 'L', 39: 'M', 40: 'N', 41: 'O', 42: 'P', 43: 'Q', 44: 'R', 45: 'S', 46: 'T', 
                            47: 'U', 48: 'V', 49: 'W', 50: 'X', 51: 'Y', 52: 'Z', 53: 'Hello', 54: 'Good Morning', 55: 'Good Afternooon',
                            56: 'Good Evening'}
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            self.running = False
         
     def run(self):
-        cap = cv2.VideoCapture(0)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        
-        mp_hands = mp.solutions.hands
-        mp_drawing = mp.solutions.drawing_utils
-        mp_drawing_styles = mp.solutions.drawing_styles
-        
-        hands = mp_hands.Hands(static_image_mode=True, min_detection_confidence=0.3)
-        
-        while self.running:
-            ret, frame = cap.read()
-            if not ret:
-                continue
-                
-            H, W, _ = frame.shape
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        cap = None
+        try:
+            cap = cv2.VideoCapture(0)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             
-            results = hands.process(frame_rgb)
+            mp_hands = mp.solutions.hands
+            mp_drawing = mp.solutions.drawing_utils
+            mp_drawing_styles = mp.solutions.drawing_styles
             
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    mp_drawing.draw_landmarks(
-                        frame,
-                        hand_landmarks,
-                        mp_hands.HAND_CONNECTIONS,
-                        mp_drawing_styles.get_default_hand_landmarks_style(),
-                        mp_drawing_styles.get_default_hand_connections_style())
-                    
-                    data_aux = []
-                    x_ = []
-                    y_ = []
-                    z_ = []
-                    
-                    # Extract x, y, z coordinates
-                    for i in range(len(hand_landmarks.landmark)):
-                        x = hand_landmarks.landmark[i].x
-                        y = hand_landmarks.landmark[i].y
-                        z = hand_landmarks.landmark[i].z
-                        x_.append(x)
-                        y_.append(y)
-                        z_.append(z)
-                    
-                    # 1. Add normalized x and y coordinates (42 features)
-                    for i in range(len(hand_landmarks.landmark)):
-                        x = hand_landmarks.landmark[i].x
-                        y = hand_landmarks.landmark[i].y
-                        data_aux.append(x - min(x_))
-                        data_aux.append(y - min(y_))
-                    
-                    # 2. Add normalized z coordinates (21 features)
-                    for i in range(len(hand_landmarks.landmark)):
-                        z = hand_landmarks.landmark[i].z
-                        data_aux.append(z - min(z_))
-                    
-                    # 3. Add distances between fingertips and wrist (5 features)
-                    wrist = hand_landmarks.landmark[0]  # Wrist landmark
-                    fingertips = [4, 8, 12, 16, 20]  # Indices of fingertips
-                    for fingertip_idx in fingertips:
-                        fingertip = hand_landmarks.landmark[fingertip_idx]
-                        distance = ((fingertip.x - wrist.x) ** 2 + 
-                                  (fingertip.y - wrist.y) ** 2 + 
-                                  (fingertip.z - wrist.z) ** 2) ** 0.5
-                        data_aux.append(distance)
-                    
-                    # 4. Add angles between adjacent fingers (4 features)
-                    for i in range(4):
-                        p1 = hand_landmarks.landmark[fingertips[i]]
-                        p2 = hand_landmarks.landmark[fingertips[i+1]]
-                        angle = np.arctan2(p2.y - p1.y, p2.x - p1.x)
-                        data_aux.append(angle)
-                    
-                    # 5. Add distances between adjacent fingertips (4 features)
-                    for i in range(4):
-                        p1 = hand_landmarks.landmark[fingertips[i]]
-                        p2 = hand_landmarks.landmark[fingertips[i+1]]
-                        distance = ((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2) ** 0.5
-                        data_aux.append(distance)
-                    
-                    # 6. Add finger curvature (8 features)
-                    for i in range(4):  # For each finger (excluding thumb)
-                        base = hand_landmarks.landmark[fingertips[i] - 3]
-                        mid = hand_landmarks.landmark[fingertips[i] - 1]
-                        tip = hand_landmarks.landmark[fingertips[i]]
-                        # Calculate two angles for each finger
-                        angle1 = np.arctan2(mid.y - base.y, mid.x - base.x)
-                        angle2 = np.arctan2(tip.y - mid.y, tip.x - mid.x)
-                        data_aux.append(angle1)
-                        data_aux.append(angle2)
-                    
-                    # Ensure we have exactly 84 features
-                    if len(data_aux) != 84:
+            hands = mp_hands.Hands(static_image_mode=True, min_detection_confidence=0.3)
+            
+            while self.running:
+                try:
+                    ret, frame = cap.read()
+                    if not ret:
+                        print("Failed to get frame from camera")
+                        # Small delay to avoid CPU spinning
+                        self.msleep(100)
                         continue
+                        
+                    H, W, _ = frame.shape
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     
-                    x1 = int(min(x_) * W) - 10
-                    y1 = int(min(y_) * H) - 10
-                    x2 = int(max(x_) * W) - 10
-                    y2 = int(max(y_) * H) - 10
+                    results = hands.process(frame_rgb)
                     
-                    prediction = self.model.predict([np.asarray(data_aux)])
-                    predicted_character = self.labels_dict[int(prediction[0])]
+                    if results.multi_hand_landmarks:
+                        for hand_landmarks in results.multi_hand_landmarks:
+                            mp_drawing.draw_landmarks(
+                                frame,
+                                hand_landmarks,
+                                mp_hands.HAND_CONNECTIONS,
+                                mp_drawing_styles.get_default_hand_landmarks_style(),
+                                mp_drawing_styles.get_default_hand_connections_style())
+                            
+                            data_aux = []
+                            x_ = []
+                            y_ = []
+                            z_ = []
+                            
+                            # Extract x, y, z coordinates
+                            for i in range(len(hand_landmarks.landmark)):
+                                x = hand_landmarks.landmark[i].x
+                                y = hand_landmarks.landmark[i].y
+                                z = hand_landmarks.landmark[i].z
+                                x_.append(x)
+                                y_.append(y)
+                                z_.append(z)
+                            
+                            # 1. Add normalized x and y coordinates (42 features)
+                            for i in range(len(hand_landmarks.landmark)):
+                                x = hand_landmarks.landmark[i].x
+                                y = hand_landmarks.landmark[i].y
+                                data_aux.append(x - min(x_))
+                                data_aux.append(y - min(y_))
+                            
+                            # 2. Add normalized z coordinates (21 features)
+                            for i in range(len(hand_landmarks.landmark)):
+                                z = hand_landmarks.landmark[i].z
+                                data_aux.append(z - min(z_))
+                            
+                            # 3. Add distances between fingertips and wrist (5 features)
+                            wrist = hand_landmarks.landmark[0]  # Wrist landmark
+                            fingertips = [4, 8, 12, 16, 20]  # Indices of fingertips
+                            for fingertip_idx in fingertips:
+                                fingertip = hand_landmarks.landmark[fingertip_idx]
+                                distance = ((fingertip.x - wrist.x) ** 2 + 
+                                          (fingertip.y - wrist.y) ** 2 + 
+                                          (fingertip.z - wrist.z) ** 2) ** 0.5
+                                data_aux.append(distance)
+                            
+                            # 4. Add angles between adjacent fingers (4 features)
+                            for i in range(4):
+                                p1 = hand_landmarks.landmark[fingertips[i]]
+                                p2 = hand_landmarks.landmark[fingertips[i+1]]
+                                angle = np.arctan2(p2.y - p1.y, p2.x - p1.x)
+                                data_aux.append(angle)
+                            
+                            # 5. Add distances between adjacent fingertips (4 features)
+                            for i in range(4):
+                                p1 = hand_landmarks.landmark[fingertips[i]]
+                                p2 = hand_landmarks.landmark[fingertips[i+1]]
+                                distance = ((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2) ** 0.5
+                                data_aux.append(distance)
+                            
+                            # 6. Add finger curvature (8 features)
+                            for i in range(4):  # For each finger (excluding thumb)
+                                base = hand_landmarks.landmark[fingertips[i] - 3]
+                                mid = hand_landmarks.landmark[fingertips[i] - 1]
+                                tip = hand_landmarks.landmark[fingertips[i]]
+                                # Calculate two angles for each finger
+                                angle1 = np.arctan2(mid.y - base.y, mid.x - base.x)
+                                angle2 = np.arctan2(tip.y - mid.y, tip.x - mid.x)
+                                data_aux.append(angle1)
+                                data_aux.append(angle2)
+                            
+                            # Ensure we have exactly 84 features
+                            if len(data_aux) != 84:
+                                continue
+                            
+                            x1 = int(min(x_) * W) - 10
+                            y1 = int(min(y_) * H) - 10
+                            x2 = int(max(x_) * W) - 10
+                            y2 = int(max(y_) * H) - 10
+                            
+                            try:
+                                prediction = self.model.predict([np.asarray(data_aux)])
+                                predicted_character = self.labels_dict[int(prediction[0])]
+                                
+                                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 4)
+                                cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3, cv2.LINE_AA)
+                                
+                                # Emit the predicted character
+                                self.update_text.emit(predicted_character)
+                            except Exception as e:
+                                print(f"Error during prediction: {e}")
                     
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 4)
-                    cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3, cv2.LINE_AA)
+                    # Convert frame to QImage
+                    rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    h, w, ch = rgb_image.shape
+                    bytes_per_line = ch * w
+                    qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                    self.update_frame.emit(qt_image)
                     
-                    # Emit the predicted character
-                    self.update_text.emit(predicted_character)
-            
-            # Convert frame to QImage
-            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            h, w, ch = rgb_image.shape
-            bytes_per_line = ch * w
-            qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            self.update_frame.emit(qt_image)
-            
-        cap.release()
+                    # Small delay to prevent CPU overuse
+                    self.msleep(10)
+                    
+                except Exception as e:
+                    print(f"Error in SignLanguageThread: {e}")
+                    # Sleep to avoid rapid error logging
+                    self.msleep(500)
+                
+        except Exception as e:
+            print(f"Critical error in SignLanguageThread: {e}")
+        finally:
+            if cap is not None:
+                cap.release()
         
     def stop(self):
         self.running = False
-        self.wait()
+        # Wait maximum 2 seconds for thread to terminate
+        self.wait(2000)
 
 class PopupWindow(QDialog):
     def __init__(self, parent=None, content="", popup_type="first", image_path=None):
@@ -388,9 +416,26 @@ class PopupWindow(QDialog):
         layout.addLayout(button_layout)
     
     def open_user_guide(self):
-        # This would open a user guide - for now just accept the dialog
-        # Could be implemented to open a PDF or another window with help content
+        # Close the current popup
         self.accept()
+        
+        # Import and show the UserGuideModule
+        from UserGuide import UserGuideModule
+        
+        # Find the parent TranslationModule window to close it
+        for widget in QApplication.topLevelWidgets():
+            if isinstance(widget, TranslationModule):
+                # First create the user guide module
+                user_guide = UserGuideModule()
+                user_guide.showFullScreen()  # Show in full screen mode
+                
+                # Then close the translation module
+                widget.close()
+                return
+        
+        # Fallback if no parent window found
+        user_guide = UserGuideModule()
+        user_guide.showFullScreen()  # Show in full screen mode
     
     def show_final_shared_popup(self):
         self.accept()  # Close current popup
@@ -1224,35 +1269,51 @@ class TranslationModule(QMainWindow):
     
     def go_back(self, event):
         """Return to the main menu when the back button is clicked"""
-        # First, stop video processing to free up resources
-        if self.sign_language_thread is not None:
-            self.sign_language_thread.stop()
-            self.sign_language_thread = None
-            
-        if self.video_thread is not None:
-            self.video_thread.stop()
-            self.video_thread = None
+        try:
+            # First, stop video processing to free up resources
+            if self.sign_language_thread is not None:
+                self.sign_language_thread.stop()
+                self.sign_language_thread.wait()  # Ensure thread is fully stopped
+                self.sign_language_thread = None
+                
+            if self.video_thread is not None:
+                self.video_thread.stop()
+                self.video_thread.wait()  # Ensure thread is fully stopped
+                self.video_thread = None
+                
+            # Explicitly stop timers
+            if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
+                self.translation_timer.stop()
+                
+            if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
+                self.word_spacing_timer.stop()
 
-        # Hide current window instead of closing it
-        # This avoids the overhead of destroying and recreating the window
-        self.hide()
-        
-        # Find and show the main menu window
-        for widget in QApplication.topLevelWidgets():
-            if widget != self and isinstance(widget, QMainWindow):
-                # Show the main menu
-                widget.show()
+            # Hide current window instead of closing it
+            self.hide()
+            
+            # Import the main menu
+            from MainMenu import Ui_MainWindow
+            
+            # Find existing MainWindow or create a new one
+            for widget in QApplication.topLevelWidgets():
+                if widget != self and isinstance(widget, QMainWindow):
+                    # Show the main menu
+                    widget.showFullScreen()
+                    return
                 
-                # Update UI immediately to make transition feel instant
-                QApplication.processEvents()
-                return
-                
-        # If no existing main window is found (unlikely), create a new one
-        from MainMenu import Ui_MainWindow
-        main_window = QMainWindow()
-        ui = Ui_MainWindow()
-        ui.setupUi(main_window)
-        main_window.show()
+            # If no existing main window is found, create a new one
+            main_window = QMainWindow()
+            ui = Ui_MainWindow()
+            ui.setupUi(main_window)
+            main_window.showFullScreen()
+        except Exception as e:
+            print(f"Error during navigation: {e}")
+            # Ensure we still try to show the main menu even if there's an error
+            from MainMenu import Ui_MainWindow
+            main_window = QMainWindow()
+            ui = Ui_MainWindow()
+            ui.setupUi(main_window)
+            main_window.showFullScreen()
     
     def update_video_frame(self, image):
         """Update the video placeholder with a new frame"""
@@ -1342,11 +1403,53 @@ class TranslationModule(QMainWindow):
     
     def closeEvent(self, event):
         """Clean up resources when closing the window"""
-        if self.sign_language_thread is not None:
-            self.sign_language_thread.stop()
-        if self.video_thread is not None:
-            self.video_thread.stop()
+        try:
+            if self.sign_language_thread is not None:
+                self.sign_language_thread.stop()
+                self.sign_language_thread.wait()  # Ensure thread is fully stopped
+                self.sign_language_thread = None
+                
+            if self.video_thread is not None:
+                self.video_thread.stop()
+                self.video_thread.wait()  # Ensure thread is fully stopped
+                self.video_thread = None
+                
+            # Explicitly stop timers
+            if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
+                self.translation_timer.stop()
+                
+            if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
+                self.word_spacing_timer.stop()
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+        
+        # Call the base class implementation
         super().closeEvent(event)
+
+    def hideEvent(self, event):
+        """Ensure resources are cleaned up when hiding the window"""
+        try:
+            # Stop video processing to free up resources
+            if self.sign_language_thread is not None:
+                self.sign_language_thread.stop()
+                self.sign_language_thread.wait()  # Ensure thread is fully stopped
+                self.sign_language_thread = None
+                
+            if self.video_thread is not None:
+                self.video_thread.stop()
+                self.video_thread.wait()  # Ensure thread is fully stopped
+                self.video_thread = None
+                
+            # Explicitly stop timers
+            if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
+                self.translation_timer.stop()
+                
+            if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
+                self.word_spacing_timer.stop()
+        except Exception as e:
+            print(f"Error during hide cleanup: {e}")
+        
+        super().hideEvent(event)
 
     def clear_chat(self):
         """Clear all chat messages and sign language display"""

@@ -1,5 +1,6 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy)
+from PyQt5 import QtWidgets  # Add this for QtWidgets.QMainWindow
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QCursor, QFont
 import sys
@@ -19,11 +20,17 @@ class UserGuideModule(QMainWindow):
         self.current_slide = 1
         self.total_slides = 5
         
-        # Setup UI
-        self.setup_ui()
-        
-        # Add resize event handler
-        self.resizeEvent = self.handle_resize
+        # Error handling for image loading
+        try:
+            # Setup UI
+            self.setup_ui()
+            
+            # Add resize event handler
+            self.resizeEvent = self.handle_resize
+        except Exception as e:
+            print(f"Error initializing UserGuide: {e}")
+            # Create a simple UI with error message if setup fails
+            self.create_error_ui(str(e))
         
     def setup_ui(self):
         # Main central widget
@@ -105,35 +112,40 @@ class UserGuideModule(QMainWindow):
     
     def update_slide(self):
         """Update the slide image based on current_slide"""
-        slide_path = f"images/userguideassets/{self.current_slide}.png"
-        
-        # Get window size for scaling
-        width = self.width()
-        height = self.height() - 200  # Account for header and nav buttons
-        
-        # Load and scale image to fit width while maintaining aspect ratio
-        pixmap = QPixmap(slide_path)
-        if not pixmap.isNull():
-            scaled_pixmap = pixmap.scaled(width - 40, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.slide_image.setPixmap(scaled_pixmap)
-        else:
-            # If image not found, show error message
-            self.slide_image.setText(f"Error: Could not load {slide_path}")
+        try:
+            slide_path = f"images/userguideassets/{self.current_slide}.png"
             
-        # Update button states
-        self.prev_button.setEnabled(self.current_slide > 1)
-        self.next_button.setEnabled(self.current_slide < self.total_slides)
-        
-        # Visual feedback for disabled buttons
-        if self.current_slide == 1:
-            self.prev_button.setStyleSheet("opacity: 0.5;")
-        else:
-            self.prev_button.setStyleSheet("opacity: 1;")
+            # Get window size for scaling
+            width = self.width()
+            height = self.height() - 200  # Account for header and nav buttons
             
-        if self.current_slide == self.total_slides:
-            self.next_button.setStyleSheet("opacity: 0.5;")
-        else:
-            self.next_button.setStyleSheet("opacity: 1;")
+            # Load and scale image to fit width while maintaining aspect ratio
+            pixmap = QPixmap(slide_path)
+            if not pixmap.isNull():
+                scaled_pixmap = pixmap.scaled(width - 40, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.slide_image.setPixmap(scaled_pixmap)
+            else:
+                # If image not found, show error message
+                self.slide_image.setText(f"Could not load image: {slide_path}")
+                print(f"Could not load image: {slide_path}")
+            
+            # Update button states
+            self.prev_button.setEnabled(self.current_slide > 1)
+            self.next_button.setEnabled(self.current_slide < self.total_slides)
+            
+            # Visual feedback for disabled buttons
+            if self.current_slide == 1:
+                self.prev_button.setStyleSheet("opacity: 0.5;")
+            else:
+                self.prev_button.setStyleSheet("opacity: 1;")
+            
+            if self.current_slide == self.total_slides:
+                self.next_button.setStyleSheet("opacity: 0.5;")
+            else:
+                self.next_button.setStyleSheet("opacity: 1;")
+        except Exception as e:
+            print(f"Error updating slide: {e}")
+            self.slide_image.setText(f"Error: {e}")
     
     def next_slide(self, event):
         """Go to the next slide"""
@@ -183,30 +195,81 @@ class UserGuideModule(QMainWindow):
         # Update the slide for new dimensions
         self.update_slide()
         
+    def create_error_ui(self, error_message):
+        """Create a simple UI when normal initialization fails"""
+        # Main central widget
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        
+        # Simple layout
+        layout = QVBoxLayout(self.central_widget)
+        
+        # Error message
+        error_label = QLabel(f"An error occurred: {error_message}")
+        error_label.setWordWrap(True)
+        error_label.setStyleSheet("color: red; font-size: 16px;")
+        layout.addWidget(error_label)
+        
+        # Back button
+        back_button = QPushButton("Return to Main Menu")
+        back_button.clicked.connect(self.go_back_safe)
+        layout.addWidget(back_button)
+    
+    def go_back_safe(self, event=None):
+        """Safe version of go_back that handles exceptions"""
+        try:
+            self.go_back(event if event else None)
+        except Exception as e:
+            print(f"Error going back to main menu: {e}")
+            # Try a simpler way to get back to main menu
+            try:
+                from MainMenu import Ui_MainWindow
+                self.close()
+                main_window = QtWidgets.QMainWindow()
+                ui = Ui_MainWindow()
+                ui.setupUi(main_window)
+                main_window.showFullScreen()
+            except Exception as e2:
+                print(f"Critical error returning to main menu: {e2}")
+                # Last resort - just close this window
+                self.close()
+    
     def go_back(self, event):
         """Return to the main menu when the back button is clicked"""
-        # Import the main menu
-        from MainMenu import Ui_MainWindow
-        
-        # Close current window
-        self.close()
-        
-        # Try to find existing MainWindow instance first
-        for widget in QApplication.topLevelWidgets():
-            if isinstance(widget, QMainWindow) and widget != self:
-                # Found an existing main window, show it
-                widget.show()
-                return
-        
-        # If no existing main window is found, create a new one
-        main_window = QMainWindow()
-        ui = Ui_MainWindow()
-        ui.setupUi(main_window)
-        main_window.show()
+        try:
+            # Import the main menu
+            from MainMenu import Ui_MainWindow
+            
+            # Close current window
+            self.close()
+            
+            # Close any other windows like Translation module
+            for widget in QApplication.topLevelWidgets():
+                if isinstance(widget, QMainWindow) and widget != self:
+                    widget.close()
+            
+            # Create a new MainWindow instance
+            main_window = QtWidgets.QMainWindow()
+            ui = Ui_MainWindow()
+            ui.setupUi(main_window)
+            main_window.showFullScreen()  # Show in full screen mode
+        except Exception as e:
+            print(f"Error in go_back: {e}")
+            # Try a simpler approach
+            self.close()
+    
+    def closeEvent(self, event):
+        """Handle window close event with proper cleanup"""
+        try:
+            # Any cleanup needed
+            pass
+        except Exception as e:
+            print(f"Error during UserGuide close: {e}")
+        event.accept()  # Always accept the close event
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = UserGuideModule()
-    window.show()
+    window.showFullScreen()  # Show in full screen mode
     sys.exit(app.exec_()) 

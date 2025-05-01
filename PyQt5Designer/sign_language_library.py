@@ -486,7 +486,7 @@ class SignLanguageLibrary(QMainWindow):
         
         # Back button with icon
         back_button = QPushButton()
-        back_icon = QIcon("PyQt5Designer/images/backbutton.png")
+        back_icon = QIcon("images/backbutton.png")
         back_button.setIcon(back_icon)
         back_button.setIconSize(QSize(40, 40))
         back_button.setStyleSheet(f"""
@@ -508,7 +508,7 @@ class SignLanguageLibrary(QMainWindow):
         
         # Title with logo
         title_label = QLabel()
-        title_pixmap = QPixmap("PyQt5Designer/images/signlibrary.png")
+        title_pixmap = QPixmap("images/signlibrary.png")
         title_label.setPixmap(title_pixmap)
         title_label.setAlignment(Qt.AlignCenter)
         
