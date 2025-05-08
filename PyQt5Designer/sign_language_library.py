@@ -789,13 +789,13 @@ class SignLanguageLibrary(QMainWindow):
             # Determine image path based on the item type
             if "Letter" in item_text:
                 letter_value = item_text.split()[-1].lower()
-                image_path = f"PyQt5Designer/images/letter_{letter_value}.png"
+                image_path = f"images/letter_{letter_value}.png"
             elif "Number" in item_text:
                 number_value = item_text.split()[-1]
-                image_path = f"PyQt5Designer/images/number_{number_value}.png"
+                image_path = f"images/number_{number_value}.png"
             else:
                 filename = item_text.lower().replace(' ', '_').replace('?', '').replace('!', '')
-                image_path = f"PyQt5Designer/images/{category.lower()}_{filename}.png"
+                image_path = f"images/{category.lower()}_{filename}.png"
             
             # Store item info for search
             self.all_items[category].append({
