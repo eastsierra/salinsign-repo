@@ -652,6 +652,9 @@ class TranslationModule(QMainWindow):
         # Default camera ID
         self.current_camera_id = 0
         
+        # Camera switching lock to prevent race conditions
+        self.camera_switching = False
+        
         # Detect available cameras
         self.available_cameras = get_available_cameras()
         
@@ -690,6 +693,9 @@ class TranslationModule(QMainWindow):
         self.word_spacing_timer.setSingleShot(True)
         self.word_spacing_timer.timeout.connect(self.add_space)
         self.last_gesture_time = 0
+        
+        # Flag to track navigation state
+        self._navigating = False
 
     def setup_ui(self):
         # Main central widget
@@ -1447,15 +1453,26 @@ class TranslationModule(QMainWindow):
         """Return to the main menu when the back button is clicked"""
         try:
             # Set a flag to prevent re-entering this method
-            if hasattr(self, '_navigating') and self._navigating:
+            if self._navigating:
                 print("Navigation already in progress, ignoring request")
                 return
             self._navigating = True
+
+            # If camera is currently switching, give it a moment to complete
+            if self.camera_switching:
+                print("Camera switch in progress, waiting briefly...")
+                # Sleep for a short time to let camera switching complete
+                for _ in range(5):  # Try for up to 500ms
+                    if not self.camera_switching:
+                        break
+                    QApplication.processEvents()
+                    self.msleep(100)
 
             # First, stop video processing to free up resources
             print("Stopping sign language thread...")
             if self.sign_language_thread is not None:
                 try:
+                    self.sign_language_thread.running = False  # Force running flag to False
                     self.sign_language_thread.stop()
                     # Use a timeout to avoid hanging if thread doesn't respond
                     if not self.sign_language_thread.wait(3000):  # 3 second timeout
@@ -1467,6 +1484,7 @@ class TranslationModule(QMainWindow):
             print("Stopping video thread...")
             if self.video_thread is not None:
                 try:
+                    self.video_thread.running = False  # Force running flag to False
                     self.video_thread.stop()
                     # Use a timeout to avoid hanging if thread doesn't respond
                     if not self.video_thread.wait(3000):  # 3 second timeout
@@ -1520,8 +1538,8 @@ class TranslationModule(QMainWindow):
                     except Exception as e2:
                         print(f"Critical error returning to main menu: {e2}")
             
-            # Use a timer to delay the navigation
-            QTimer.singleShot(300, perform_navigation)
+            # Use a longer delay to give threads more time to clean up
+            QTimer.singleShot(500, perform_navigation)
             
         except Exception as e:
             print(f"Error during back button handling: {e}")
@@ -1534,7 +1552,13 @@ class TranslationModule(QMainWindow):
                 main_window.showFullScreen()
             except Exception as e2:
                 print(f"Critical error returning to main menu: {e2}")
-    
+                
+    def msleep(self, msecs):
+        """Helper method to sleep for milliseconds without blocking UI"""
+        deadline = QTime.currentTime().addMSecs(msecs)
+        while QTime.currentTime() < deadline:
+            QApplication.processEvents(QApplication.ExclusiveUserInputEvents)
+
     def update_video_frame(self, image):
         """Update the video placeholder with a new frame"""
         scaled_image = image.scaled(self.video_placeholder.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -1704,15 +1728,38 @@ class TranslationModule(QMainWindow):
         if index < 0 or index >= len(self.available_cameras):
             return
             
-        # Get the selected camera ID
-        new_camera_id = self.available_cameras[index]["id"]
+        # Make sure we're not navigating back
+        if self._navigating:
+            return
+            
+        # Set camera switching flag to prevent race conditions
+        self.camera_switching = True
         
-        # Update the current camera ID
-        self.current_camera_id = new_camera_id
-        
-        # If video thread is running, update it
-        if self.sign_language_thread is not None and self.sign_language_thread.isRunning():
-            self.sign_language_thread.set_camera(new_camera_id)
+        try:
+            # Get the selected camera ID
+            new_camera_id = self.available_cameras[index]["id"]
+            
+            # Update the current camera ID
+            self.current_camera_id = new_camera_id
+            
+            # If video thread is running, update it with safe error handling
+            if self.sign_language_thread is not None and self.sign_language_thread.isRunning():
+                try:
+                    self.sign_language_thread.set_camera(new_camera_id)
+                except Exception as e:
+                    print(f"Error switching camera: {e}")
+                    # Restart the thread if camera switching fails
+                    try:
+                        self.sign_language_thread.stop()
+                        self.sign_language_thread.wait(2000)
+                        self.sign_language_thread = None
+                        # Short delay before restarting
+                        QTimer.singleShot(500, self.setup_video_stream)
+                    except Exception as e2:
+                        print(f"Error restarting video thread: {e2}")
+        finally:
+            # Clear camera switching flag
+            self.camera_switching = False
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
