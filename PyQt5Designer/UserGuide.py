@@ -18,7 +18,7 @@ class UserGuideModule(QMainWindow):
         
         # Keep track of current slide
         self.current_slide = 1
-        self.total_slides = 5
+        self.total_slides = 10
         
         # Error handling for image loading
         try:

@@ -1071,19 +1071,27 @@ class SignLanguageLibrary(QMainWindow):
             # Close current window
             self.close()
             
-            # Show the main menu window again
+            # Close any other windows like Translation module
             for widget in QApplication.topLevelWidgets():
                 if isinstance(widget, QMainWindow) and widget != self:
-                    widget.show()
-                    return
+                    widget.close()  # Close other modules like Translation
             
-            # If no existing main window is found, create a new one
-            self.main_window = QMainWindow()
-            self.ui = Ui_MainWindow()
-            self.ui.setupUi(self.main_window)
-            self.main_window.show()
-        except ImportError:
-            pass
+            # If no existing main menu window is found, create a new one
+            main_window = QMainWindow()
+            ui = Ui_MainWindow()
+            ui.setupUi(main_window)
+            main_window.showFullScreen()
+        except Exception as e:
+            print(f"Error during navigation: {e}")
+            # Last resort - try a simpler approach
+            try:
+                from MainMenu import Ui_MainWindow
+                main_window = QMainWindow()
+                ui = Ui_MainWindow()
+                ui.setupUi(main_window)
+                main_window.showFullScreen()
+            except:
+                pass
 
     def resizeEvent(self, event):
         """Handle window resize to update item sizes"""

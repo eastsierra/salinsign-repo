@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit,
-                           QScrollArea, QSizePolicy, QFrame, QCheckBox, QDialog)
+                           QScrollArea, QSizePolicy, QFrame, QCheckBox, QDialog, QComboBox)
 from PyQt5.QtCore import Qt, QSize, QUrl, QThread, pyqtSignal, QByteArray, QTime, QTimer
 from PyQt5.QtGui import QPixmap, QCursor, QFont, QImage
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
@@ -11,51 +11,101 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
+def get_available_cameras(max_cameras=10):
+    """Detect available camera devices by trying to open each index"""
+    available_cameras = []
+    for i in range(max_cameras):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            # Get camera name/description if possible
+            # On most systems, this may just return a generic name
+            ret, frame = cap.read()
+            if ret:
+                name = f"Camera {i}"
+                # Try to get camera properties (may not work on all systems)
+                try:
+                    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    name = f"Camera {i} ({width}x{height})"
+                except:
+                    pass
+                available_cameras.append({"id": i, "name": name})
+            cap.release()
+    
+    # If no cameras found, add a dummy entry
+    if not available_cameras:
+        available_cameras.append({"id": 0, "name": "Default Camera"})
+    
+    return available_cameras
+
 class VideoStreamThread(QThread):
     update_frame = pyqtSignal(QImage)
     
-    def __init__(self, url):
+    def __init__(self, camera_id=0):
         super().__init__()
-        self.url = url
+        self.camera_id = camera_id
         self.running = True
+        self.cap = None
         
     def run(self):
-        # This is a placeholder for video streaming
-        # In a real implementation, you would use OpenCV or other libraries
-        # to fetch video frames from the URL and emit them as QImage objects
-        
-        # For demonstration purposes, we'll use a network manager to try to fetch images
-        # Note: This is not a proper video streaming implementation and would need to be 
-        # replaced with a proper video streaming solution in production
-        
-        self.network_manager = QNetworkAccessManager()
-        self.network_manager.finished.connect(self.handle_reply)
-        
-        # Continually request new frames while running
-        while self.running:
-            self.network_manager.get(QNetworkRequest(QUrl(self.url)))
-            # Sleep to avoid overwhelming the network
-            self.msleep(100)  # 10 FPS
+        try:
+            # Initialize camera with specified ID
+            self.cap = cv2.VideoCapture(self.camera_id)
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             
-    def handle_reply(self, reply):
-        if reply.error() == QNetworkReply.NoError:
-            # Convert data to QImage
-            data = reply.readAll()
-            image = QImage.fromData(data)
-            if not image.isNull():
-                self.update_frame.emit(image)
+            while self.running:
+                ret, frame = self.cap.read()
+                if not ret:
+                    print(f"Failed to get frame from camera {self.camera_id}")
+                    self.msleep(100)  # Sleep to avoid CPU spinning
+                    continue
+                
+                # Convert frame to QImage
+                rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                h, w, ch = rgb_image.shape
+                bytes_per_line = ch * w
+                qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                self.update_frame.emit(qt_image)
+                
+                # Small delay to prevent CPU overuse
+                self.msleep(30)
+        except Exception as e:
+            print(f"Error in VideoStreamThread: {e}")
+        finally:
+            if self.cap is not None and self.cap.isOpened():
+                self.cap.release()
+    
+    def set_camera(self, camera_id):
+        """Change the camera source"""
+        if self.camera_id == camera_id:
+            return  # No change needed
+            
+        self.camera_id = camera_id
         
+        # Restart the camera capture
+        if self.cap is not None and self.cap.isOpened():
+            self.cap.release()
+        
+        self.cap = cv2.VideoCapture(self.camera_id)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    
     def stop(self):
         self.running = False
+        if self.cap is not None and self.cap.isOpened():
+            self.cap.release()
         self.wait()
 
 class SignLanguageThread(QThread):
     update_frame = pyqtSignal(QImage)
     update_text = pyqtSignal(str)
     
-    def __init__(self):
+    def __init__(self, camera_id=0):
         super().__init__()
+        self.camera_id = camera_id
         self.running = True
+        self.cap = None
         
         # Load model in try-except block to catch any exceptions
         try:
@@ -68,17 +118,16 @@ class SignLanguageThread(QThread):
                            25: 'Blood Pressure', 26: 'Heartache', 27: 'A', 28: 'B', 29: 'C', 30: 'D', 31: 'E', 32: 'F', 33: 'G', 34: 'H', 35: 'I', 
                            36: 'J', 37: 'K', 38: 'L', 39: 'M', 40: 'N', 41: 'O', 42: 'P', 43: 'Q', 44: 'R', 45: 'S', 46: 'T', 
                            47: 'U', 48: 'V', 49: 'W', 50: 'X', 51: 'Y', 52: 'Z', 53: 'Hello', 54: 'Good Morning', 55: 'Good Afternooon',
-                           56: 'Good Evening'}
+                           56: 'Good Evening',  57: 'Thank You', 58: 'Good Bye', 59: '3', 60: '4', 61: '5', 62: '7', 63: '8', 64: '9', 65: '10'}
         except Exception as e:
             print(f"Error loading model: {e}")
             self.running = False
         
     def run(self):
-        cap = None
         try:
-            cap = cv2.VideoCapture(0)
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            self.cap = cv2.VideoCapture(self.camera_id)
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             
             mp_hands = mp.solutions.hands
             mp_drawing = mp.solutions.drawing_utils
@@ -88,7 +137,7 @@ class SignLanguageThread(QThread):
             
             while self.running:
                 try:
-                    ret, frame = cap.read()
+                    ret, frame = self.cap.read()
                     if not ret:
                         print("Failed to get frame from camera")
                         # Small delay to avoid CPU spinning
@@ -209,13 +258,35 @@ class SignLanguageThread(QThread):
         except Exception as e:
             print(f"Critical error in SignLanguageThread: {e}")
         finally:
-            if cap is not None:
-                cap.release()
+            try:
+                if self.cap is not None and self.cap.isOpened():
+                    self.cap.release()
+            except Exception as e:
+                print(f"Error releasing camera: {e}")
+        
+    def set_camera(self, camera_id):
+        """Change the camera source"""
+        if self.camera_id == camera_id:
+            return  # No change needed
+            
+        self.camera_id = camera_id
+        
+        # Restart the camera capture
+        if self.cap is not None and self.cap.isOpened():
+            self.cap.release()
+        
+        self.cap = cv2.VideoCapture(self.camera_id)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         
     def stop(self):
+        print("SignLanguageThread stopping...")
         self.running = False
-        # Wait maximum 2 seconds for thread to terminate
-        self.wait(2000)
+        try:
+            if self.cap is not None and self.cap.isOpened():
+                self.cap.release()
+        except Exception as e:
+            print(f"Error releasing camera during stop: {e}")
 
 class PopupWindow(QDialog):
     def __init__(self, parent=None, content="", popup_type="first", image_path=None):
@@ -578,6 +649,12 @@ class TranslationModule(QMainWindow):
         # Initialize display mode (True for text, False for sign language)
         self.text_mode = True
         
+        # Default camera ID
+        self.current_camera_id = 0
+        
+        # Detect available cameras
+        self.available_cameras = get_available_cameras()
+        
         # Setup UI
         self.setup_ui()
         
@@ -693,6 +770,47 @@ class TranslationModule(QMainWindow):
         self.stream_header.setPixmap(QPixmap("images/Stream.png").scaledToWidth(300, Qt.SmoothTransformation))
         self.stream_header.setAlignment(Qt.AlignCenter)
         self.box1_layout.addWidget(self.stream_header)
+        
+        # Camera selection dropdown
+        camera_selection_layout = QHBoxLayout()
+        camera_selection_layout.setContentsMargins(0, 0, 0, 0)
+        camera_selection_layout.setSpacing(10)
+        
+        camera_label = QLabel("Camera Source:")
+        camera_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: bold;
+                color: #333;
+            }
+        """)
+        camera_selection_layout.addWidget(camera_label)
+        
+        self.camera_dropdown = QComboBox()
+        self.camera_dropdown.setStyleSheet("""
+            QComboBox {
+                padding: 5px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+                min-height: 25px;
+                font-size: 14px;
+            }
+            QComboBox::drop-down {
+                width: 20px;
+                border-left: 1px solid #ccc;
+            }
+        """)
+        
+        # Add available cameras to dropdown
+        for camera in self.available_cameras:
+            self.camera_dropdown.addItem(camera["name"], camera["id"])
+        
+        # Connect dropdown change event
+        self.camera_dropdown.currentIndexChanged.connect(self.camera_selected)
+        camera_selection_layout.addWidget(self.camera_dropdown)
+        
+        self.box1_layout.addLayout(camera_selection_layout)
         
         # Video Stream Placeholder
         self.video_placeholder = QLabel("Loading Video Stream...")
@@ -924,6 +1042,12 @@ class TranslationModule(QMainWindow):
         else:
             chat_height = int(height * 0.4)
         self.chat_box.setMinimumHeight(chat_height)
+        
+        # Update sign display size if visible
+        if not self.text_mode:
+            self.sign_display.setMinimumWidth(self.box2.width() - 50)
+            # Force layout update
+            self.update_sign_display_for_all_messages()
 
     def load_stylesheet(self):
         """Load the external stylesheet"""
@@ -1032,34 +1156,77 @@ class TranslationModule(QMainWindow):
         # Clear existing display first
         self.clear_sign_display()
         
-        # Create a new row for each word
+        # Available width for images in a row
+        max_row_width = self.sign_display.width() - 30  # Account for margins
+        default_image_size = 120  # Default image size
+        min_image_size = 50  # Minimum size we'll reduce to
+        
+        # Group images by word (each word is followed by None)
+        words = []
+        current_word = []
+        
+        for img_path in image_paths:
+            if img_path is None:  # Word boundary
+                if current_word:  # Only add non-empty words
+                    words.append(current_word)
+                    current_word = []
+            else:
+                current_word.append(img_path)
+        
+        # Add the last word if there is one
+        if current_word:
+            words.append(current_word)
+        
         current_row_layout = QHBoxLayout()
         current_row_layout.setSpacing(5)
         current_row_layout.setContentsMargins(0, 0, 0, 0)
-        current_row_layout.setAlignment(Qt.AlignLeft)  # Align to the left
+        current_row_layout.setAlignment(Qt.AlignLeft)
+        current_row_width = 0
         
-        for image_path in image_paths:
-            if image_path is None:  # Word boundary marker
-                # Add the current row to the main layout
+        # Process each word
+        for word_images in words:
+            # Check if this word would fit at default size
+            word_width = len(word_images) * (default_image_size + 5) - 5  # Account for spacing
+            
+            # If word doesn't fit at default size, calculate a smaller size
+            image_size = default_image_size
+            if word_width > max_row_width:
+                # Calculate new size that will make the word fit
+                image_size = max(min_image_size, int((max_row_width - (len(word_images) - 1) * 5) / len(word_images)))
+                print(f"Reducing image size to {image_size} for word of length {len(word_images)}")
+            
+            # Check if we need to start a new row for this word
+            word_scaled_width = len(word_images) * (image_size + 5) - 5
+            if current_row_width + word_scaled_width > max_row_width and current_row_layout.count() > 0:
+                # Add current row and start a new one
                 self.sign_display_layout.addLayout(current_row_layout)
-                # Create a new row for the next word
                 current_row_layout = QHBoxLayout()
                 current_row_layout.setSpacing(5)
                 current_row_layout.setContentsMargins(0, 0, 0, 0)
-                current_row_layout.setAlignment(Qt.AlignLeft)  # Align to the left
-                continue
+                current_row_layout.setAlignment(Qt.AlignLeft)
+                current_row_width = 0
+            
+            # Add all images for this word
+            for img_path in word_images:
+                image_label = QLabel()
+                pixmap = QPixmap(img_path)
+                if pixmap.isNull():
+                    print(f"Failed to load image: {img_path}")
+                    continue
                 
-            image_label = QLabel()
-            pixmap = QPixmap(image_path)
-            if pixmap.isNull():
-                print(f"Failed to load image: {image_path}")
-                continue
-            # Scale the image to a larger size
-            scaled_pixmap = pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            image_label.setPixmap(scaled_pixmap)
-            image_label.setAlignment(Qt.AlignLeft)  # Align image to the left
-            image_label.setMinimumSize(120, 120)
-            current_row_layout.addWidget(image_label)
+                # Scale the image to the calculated size
+                scaled_pixmap = pixmap.scaled(image_size, image_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                image_label.setPixmap(scaled_pixmap)
+                image_label.setAlignment(Qt.AlignCenter)
+                image_label.setFixedSize(image_size, image_size)
+                current_row_layout.addWidget(image_label)
+                current_row_width += image_size + 5
+            
+            # Add space after each word (if not the last word)
+            spacer = QLabel()
+            spacer.setFixedSize(10, image_size)  # Smaller visual space between words
+            current_row_layout.addWidget(spacer)
+            current_row_width += 10
         
         # Add the last row if it has any images
         if current_row_layout.count() > 0:
@@ -1083,6 +1250,11 @@ class TranslationModule(QMainWindow):
             # Hide text messages and show sign language
             self.chat_box.hide()
             self.sign_display_scroll.show()
+            
+            # Ensure the sign display has its layout updated before showing
+            self.sign_display_scroll.setWidgetResizable(True)
+            self.sign_display.setMinimumWidth(self.box2.width() - 50)  # Allow enough width for the signs
+            
             # Clear and update sign language display for all messages
             self.update_sign_display_for_all_messages()
     
@@ -1103,6 +1275,10 @@ class TranslationModule(QMainWindow):
                     sign_images = self.convert_text_to_sign(word)
                     all_sign_images.extend(sign_images)
                     all_sign_images.append(None)  # Add word boundary marker
+            
+            # Ensure sign display has correct size before displaying images
+            self.sign_display.updateGeometry()
+            QApplication.processEvents()
             
             # Display all sign images
             self.display_sign_images(all_sign_images)
@@ -1270,50 +1446,94 @@ class TranslationModule(QMainWindow):
     def go_back(self, event):
         """Return to the main menu when the back button is clicked"""
         try:
+            # Set a flag to prevent re-entering this method
+            if hasattr(self, '_navigating') and self._navigating:
+                print("Navigation already in progress, ignoring request")
+                return
+            self._navigating = True
+
             # First, stop video processing to free up resources
+            print("Stopping sign language thread...")
             if self.sign_language_thread is not None:
-                self.sign_language_thread.stop()
-                self.sign_language_thread.wait()  # Ensure thread is fully stopped
-                self.sign_language_thread = None
-                
+                try:
+                    self.sign_language_thread.stop()
+                    # Use a timeout to avoid hanging if thread doesn't respond
+                    if not self.sign_language_thread.wait(3000):  # 3 second timeout
+                        print("Warning: Sign language thread did not stop cleanly")
+                    self.sign_language_thread = None
+                except Exception as e:
+                    print(f"Error stopping sign language thread: {e}")
+            
+            print("Stopping video thread...")
             if self.video_thread is not None:
-                self.video_thread.stop()
-                self.video_thread.wait()  # Ensure thread is fully stopped
-                self.video_thread = None
-                
+                try:
+                    self.video_thread.stop()
+                    # Use a timeout to avoid hanging if thread doesn't respond
+                    if not self.video_thread.wait(3000):  # 3 second timeout
+                        print("Warning: Video thread did not stop cleanly")
+                    self.video_thread = None
+                except Exception as e:
+                    print(f"Error stopping video thread: {e}")
+            
             # Explicitly stop timers
+            print("Stopping timers...")
             if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
-                self.translation_timer.stop()
+                try:
+                    self.translation_timer.stop()
+                except Exception as e:
+                    print(f"Error stopping translation timer: {e}")
                 
             if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
-                self.word_spacing_timer.stop()
+                try:
+                    self.word_spacing_timer.stop()
+                except Exception as e:
+                    print(f"Error stopping word spacing timer: {e}")
 
-            # Hide current window instead of closing it
-            self.hide()
+            # Delay the actual navigation to give threads time to clean up
+            def perform_navigation():
+                try:
+                    # Close current window instead of hiding it
+                    self.close()
+                    
+                    # Import the main menu
+                    from MainMenu import Ui_MainWindow
+                    
+                    # Close any other windows like Sign Language Library module
+                    for widget in QApplication.topLevelWidgets():
+                        if isinstance(widget, QMainWindow) and widget != self:
+                            widget.close()
+                    
+                    # Create a new MainWindow instance
+                    main_window = QMainWindow()
+                    ui = Ui_MainWindow()
+                    ui.setupUi(main_window)
+                    main_window.showFullScreen()
+                except Exception as e:
+                    print(f"Error during navigation: {e}")
+                    # Ensure we still try to show the main menu even if there's an error
+                    try:
+                        from MainMenu import Ui_MainWindow
+                        main_window = QMainWindow()
+                        ui = Ui_MainWindow()
+                        ui.setupUi(main_window)
+                        main_window.showFullScreen()
+                    except Exception as e2:
+                        print(f"Critical error returning to main menu: {e2}")
             
-            # Import the main menu
-            from MainMenu import Ui_MainWindow
+            # Use a timer to delay the navigation
+            QTimer.singleShot(300, perform_navigation)
             
-            # Find existing MainWindow or create a new one
-            for widget in QApplication.topLevelWidgets():
-                if widget != self and isinstance(widget, QMainWindow):
-                    # Show the main menu
-                    widget.showFullScreen()
-                    return
-                
-            # If no existing main window is found, create a new one
-            main_window = QMainWindow()
-            ui = Ui_MainWindow()
-            ui.setupUi(main_window)
-            main_window.showFullScreen()
         except Exception as e:
-            print(f"Error during navigation: {e}")
-            # Ensure we still try to show the main menu even if there's an error
-            from MainMenu import Ui_MainWindow
-            main_window = QMainWindow()
-            ui = Ui_MainWindow()
-            ui.setupUi(main_window)
-            main_window.showFullScreen()
+            print(f"Error during back button handling: {e}")
+            # Fallback to try to show the main menu
+            try:
+                from MainMenu import Ui_MainWindow
+                main_window = QMainWindow()
+                ui = Ui_MainWindow()
+                ui.setupUi(main_window)
+                main_window.showFullScreen()
+            except Exception as e2:
+                print(f"Critical error returning to main menu: {e2}")
     
     def update_video_frame(self, image):
         """Update the video placeholder with a new frame"""
@@ -1322,7 +1542,7 @@ class TranslationModule(QMainWindow):
     
     def setup_video_stream(self):
         """Set up the sign language recognition and video streaming"""
-        self.sign_language_thread = SignLanguageThread()
+        self.sign_language_thread = SignLanguageThread(self.current_camera_id)
         self.sign_language_thread.update_frame.connect(self.update_video_frame)
         self.sign_language_thread.update_text.connect(self.handle_recognized_sign)
         self.sign_language_thread.start()
@@ -1406,12 +1626,16 @@ class TranslationModule(QMainWindow):
         try:
             if self.sign_language_thread is not None:
                 self.sign_language_thread.stop()
-                self.sign_language_thread.wait()  # Ensure thread is fully stopped
+                # Use timeout to prevent hanging
+                if not self.sign_language_thread.wait(2000):  # 2 second timeout
+                    print("Warning: Sign language thread did not stop cleanly on close")
                 self.sign_language_thread = None
                 
             if self.video_thread is not None:
                 self.video_thread.stop()
-                self.video_thread.wait()  # Ensure thread is fully stopped
+                # Use timeout to prevent hanging
+                if not self.video_thread.wait(2000):  # 2 second timeout
+                    print("Warning: Video thread did not stop cleanly on close")
                 self.video_thread = None
                 
             # Explicitly stop timers
@@ -1474,6 +1698,21 @@ class TranslationModule(QMainWindow):
             "images/helpassets/both/welcomepopup.png"  # Path to the welcome image
         )
         popup.exec_()
+
+    def camera_selected(self, index):
+        """Handle camera selection from dropdown"""
+        if index < 0 or index >= len(self.available_cameras):
+            return
+            
+        # Get the selected camera ID
+        new_camera_id = self.available_cameras[index]["id"]
+        
+        # Update the current camera ID
+        self.current_camera_id = new_camera_id
+        
+        # If video thread is running, update it
+        if self.sign_language_thread is not None and self.sign_language_thread.isRunning():
+            self.sign_language_thread.set_camera(new_camera_id)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

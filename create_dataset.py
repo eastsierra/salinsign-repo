@@ -1,10 +1,10 @@
 import os
 import pickle
-
 import mediapipe as mp
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 
 mp_hands = mp.solutions.hands
@@ -17,6 +17,11 @@ DATA_DIR = './data'
 
 data = []
 labels = []
+
+# Count total number of images for progress bar
+total_images = sum([len(os.listdir(os.path.join(DATA_DIR, dir_))) for dir_ in os.listdir(DATA_DIR)])
+progress_bar = tqdm(total=total_images, desc="Processing images")
+
 for dir_ in os.listdir(DATA_DIR):
     for img_path in os.listdir(os.path.join(DATA_DIR, dir_)):
         data_aux = []
@@ -182,6 +187,10 @@ for dir_ in os.listdir(DATA_DIR):
 
             data.append(data_aux)
             labels.append(dir_)
+        
+        progress_bar.update(1)
+
+progress_bar.close()
 
 f = open('data.pickle', 'wb')
 pickle.dump({'data': data, 'labels': labels}, f)
