@@ -10,7 +10,7 @@ import pickle
 import cv2
 import mediapipe as mp
 import numpy as np
-import wordninja  # Import wordninja for word segmentation
+import gc
 
 def get_available_cameras(max_cameras=10):
     """Detect available camera devices by trying to open each index"""
@@ -32,43 +32,43 @@ def get_available_cameras(max_cameras=10):
                     pass
                 available_cameras.append({"id": i, "name": name})
             cap.release()
-    
+
     # If no cameras found, add a dummy entry
     if not available_cameras:
         available_cameras.append({"id": 0, "name": "Default Camera"})
-    
+
     return available_cameras
 
 class VideoStreamThread(QThread):
     update_frame = pyqtSignal(QImage)
-    
+
     def __init__(self, camera_id=0):
         super().__init__()
         self.camera_id = camera_id
         self.running = True
         self.cap = None
-        
+
     def run(self):
         try:
             # Initialize camera with specified ID
             self.cap = cv2.VideoCapture(self.camera_id)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            
+
             while self.running:
                 ret, frame = self.cap.read()
                 if not ret:
                     print(f"Failed to get frame from camera {self.camera_id}")
                     self.msleep(100)  # Sleep to avoid CPU spinning
                     continue
-                
+
                 # Convert frame to QImage
                 rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 h, w, ch = rgb_image.shape
                 bytes_per_line = ch * w
                 qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
                 self.update_frame.emit(qt_image)
-                
+
                 # Small delay to prevent CPU overuse
                 self.msleep(30)
         except Exception as e:
@@ -76,38 +76,59 @@ class VideoStreamThread(QThread):
         finally:
             if self.cap is not None and self.cap.isOpened():
                 self.cap.release()
-    
+
     def set_camera(self, camera_id):
         """Change the camera source"""
         if self.camera_id == camera_id:
             return  # No change needed
-            
+
         self.camera_id = camera_id
-        
+
         # Restart the camera capture
         if self.cap is not None and self.cap.isOpened():
             self.cap.release()
-        
+
         self.cap = cv2.VideoCapture(self.camera_id)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    
+
     def stop(self):
-        self.running = False
-        if self.cap is not None and self.cap.isOpened():
-            self.cap.release()
-        self.wait()
+        """Stop the thread safely and release resources"""
+        print("VideoStreamThread stopping...")
+        try:
+            # Signal thread to stop
+            self.running = False
+
+            # Release camera resources if available
+            try:
+                if self.cap is not None and self.cap.isOpened():
+                    print("Releasing camera in VideoStreamThread")
+                    self.cap.release()
+                    self.cap = None
+            except Exception as e:
+                print(f"Error releasing camera during stop: {e}")
+
+            # Wait briefly to see if the thread exits naturally
+            # but don't block indefinitely
+            print("Waiting for VideoStreamThread to finish...")
+            if not self.wait(300):  # 300ms timeout to give thread a chance to exit
+                print("Thread did not stop quickly, continuing with cleanup")
+
+        except Exception as e:
+            print(f"Error during VideoStreamThread stop: {e}")
+
+        print("VideoStreamThread stop completed")
 
 class SignLanguageThread(QThread):
     update_frame = pyqtSignal(QImage)
     update_text = pyqtSignal(str)
-    
+
     def __init__(self, camera_id=0):
         super().__init__()
         self.camera_id = camera_id
         self.running = True
         self.cap = None
-        
+
         # Load model in try-except block to catch any exceptions
         try:
             self.model_dict = pickle.load(open('./model.p', 'rb'))
@@ -123,19 +144,19 @@ class SignLanguageThread(QThread):
         except Exception as e:
             print(f"Error loading model: {e}")
             self.running = False
-        
+
     def run(self):
         try:
             self.cap = cv2.VideoCapture(self.camera_id)
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            
+
             mp_hands = mp.solutions.hands
             mp_drawing = mp.solutions.drawing_utils
             mp_drawing_styles = mp.solutions.drawing_styles
-            
+
             hands = mp_hands.Hands(static_image_mode=True, min_detection_confidence=0.3)
-            
+
             while self.running:
                 try:
                     ret, frame = self.cap.read()
@@ -144,12 +165,12 @@ class SignLanguageThread(QThread):
                         # Small delay to avoid CPU spinning
                         self.msleep(100)
                         continue
-                        
+
                     H, W, _ = frame.shape
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    
+
                     results = hands.process(frame_rgb)
-                    
+
                     if results.multi_hand_landmarks:
                         for hand_landmarks in results.multi_hand_landmarks:
                             mp_drawing.draw_landmarks(
@@ -158,12 +179,12 @@ class SignLanguageThread(QThread):
                                 mp_hands.HAND_CONNECTIONS,
                                 mp_drawing_styles.get_default_hand_landmarks_style(),
                                 mp_drawing_styles.get_default_hand_connections_style())
-                            
+
                             data_aux = []
                             x_ = []
                             y_ = []
                             z_ = []
-                            
+
                             # Extract x, y, z coordinates
                             for i in range(len(hand_landmarks.landmark)):
                                 x = hand_landmarks.landmark[i].x
@@ -172,19 +193,19 @@ class SignLanguageThread(QThread):
                                 x_.append(x)
                                 y_.append(y)
                                 z_.append(z)
-                            
+
                             # 1. Add normalized x and y coordinates (42 features)
                             for i in range(len(hand_landmarks.landmark)):
                                 x = hand_landmarks.landmark[i].x
                                 y = hand_landmarks.landmark[i].y
                                 data_aux.append(x - min(x_))
                                 data_aux.append(y - min(y_))
-                            
+
                             # 2. Add normalized z coordinates (21 features)
                             for i in range(len(hand_landmarks.landmark)):
                                 z = hand_landmarks.landmark[i].z
                                 data_aux.append(z - min(z_))
-                            
+
                             # 3. Add distances between fingertips and wrist (5 features)
                             wrist = hand_landmarks.landmark[0]  # Wrist landmark
                             fingertips = [4, 8, 12, 16, 20]  # Indices of fingertips
@@ -194,21 +215,21 @@ class SignLanguageThread(QThread):
                                           (fingertip.y - wrist.y) ** 2 + 
                                           (fingertip.z - wrist.z) ** 2) ** 0.5
                                 data_aux.append(distance)
-                            
+
                             # 4. Add angles between adjacent fingers (4 features)
                             for i in range(4):
                                 p1 = hand_landmarks.landmark[fingertips[i]]
                                 p2 = hand_landmarks.landmark[fingertips[i+1]]
                                 angle = np.arctan2(p2.y - p1.y, p2.x - p1.x)
                                 data_aux.append(angle)
-                            
+
                             # 5. Add distances between adjacent fingertips (4 features)
                             for i in range(4):
                                 p1 = hand_landmarks.landmark[fingertips[i]]
                                 p2 = hand_landmarks.landmark[fingertips[i+1]]
                                 distance = ((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2) ** 0.5
                                 data_aux.append(distance)
-                            
+
                             # 6. Add finger curvature (8 features)
                             for i in range(4):  # For each finger (excluding thumb)
                                 base = hand_landmarks.landmark[fingertips[i] - 3]
@@ -219,43 +240,43 @@ class SignLanguageThread(QThread):
                                 angle2 = np.arctan2(tip.y - mid.y, tip.x - mid.x)
                                 data_aux.append(angle1)
                                 data_aux.append(angle2)
-                            
+
                             # Ensure we have exactly 84 features
                             if len(data_aux) != 84:
                                 continue
-                            
+
                             x1 = int(min(x_) * W) - 10
                             y1 = int(min(y_) * H) - 10
                             x2 = int(max(x_) * W) - 10
                             y2 = int(max(y_) * H) - 10
-                            
+
                             try:
                                 prediction = self.model.predict([np.asarray(data_aux)])
                                 predicted_character = self.labels_dict[int(prediction[0])]
-                                
+
                                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 4)
                                 cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3, cv2.LINE_AA)
-                                
+
                                 # Emit the predicted character
                                 self.update_text.emit(predicted_character)
                             except Exception as e:
                                 print(f"Error during prediction: {e}")
-                    
+
                     # Convert frame to QImage
                     rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     h, w, ch = rgb_image.shape
                     bytes_per_line = ch * w
                     qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
                     self.update_frame.emit(qt_image)
-                    
+
                     # Small delay to prevent CPU overuse
                     self.msleep(10)
-                    
+
                 except Exception as e:
                     print(f"Error in SignLanguageThread: {e}")
                     # Sleep to avoid rapid error logging
                     self.msleep(500)
-                
+
         except Exception as e:
             print(f"Critical error in SignLanguageThread: {e}")
         finally:
@@ -264,30 +285,48 @@ class SignLanguageThread(QThread):
                     self.cap.release()
             except Exception as e:
                 print(f"Error releasing camera: {e}")
-        
+
     def set_camera(self, camera_id):
         """Change the camera source"""
         if self.camera_id == camera_id:
             return  # No change needed
-            
+
         self.camera_id = camera_id
-        
+
         # Restart the camera capture
         if self.cap is not None and self.cap.isOpened():
             self.cap.release()
-        
+
         self.cap = cv2.VideoCapture(self.camera_id)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        
+
     def stop(self):
+        """Stop the thread safely and release resources"""
         print("SignLanguageThread stopping...")
-        self.running = False
         try:
-            if self.cap is not None and self.cap.isOpened():
-                self.cap.release()
+            # Signal thread to stop
+            self.running = False
+
+            # Release camera resources if available
+            try:
+                if self.cap is not None and self.cap.isOpened():
+                    print("Releasing camera in SignLanguageThread")
+                    self.cap.release()
+                    self.cap = None
+            except Exception as e:
+                print(f"Error releasing camera during stop: {e}")
+
+            # Wait briefly to see if the thread exits naturally
+            # but don't block indefinitely
+            print("Waiting for SignLanguageThread to finish...")
+            if not self.wait(300):  # 300ms timeout to give thread a chance to exit
+                print("Thread did not stop quickly, continuing with cleanup")
+
         except Exception as e:
-            print(f"Error releasing camera during stop: {e}")
+            print(f"Error during SignLanguageThread stop: {e}")
+
+        print("SignLanguageThread stop completed")
 
 class PopupWindow(QDialog):
     def __init__(self, parent=None, content="", popup_type="first", image_path=None):
@@ -295,11 +334,11 @@ class PopupWindow(QDialog):
         self.setWindowTitle("")  # Remove window title
         self.setFixedSize(800, 650)  # Make popup bigger (increased from 600x500)
         self.setStyleSheet("background-color: white;")
-        
+
         # Main layout
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for image to span the whole popup
-        
+
         # Content - either image or text
         if image_path:
             content_label = QLabel()
@@ -311,16 +350,16 @@ class PopupWindow(QDialog):
             content_label = QLabel(content)
             content_label.setWordWrap(True)
             content_label.setStyleSheet("font-size: 18px; padding: 30px;")
-        
+
         layout.addWidget(content_label)
-        
+
         # Add spacer
         layout.addStretch()
-        
+
         # Button layout
         button_layout = QHBoxLayout()
         button_layout.setContentsMargins(20, 0, 20, 20)  # Add some padding around the button
-        
+
         if popup_type == "first":
             next_button = QPushButton("Let's Get Started")
             next_button.setStyleSheet("""
@@ -359,7 +398,7 @@ class PopupWindow(QDialog):
             """)
             patient_button.clicked.connect(self.show_patient_popup1)
             button_layout.addWidget(patient_button)
-            
+
             # Create Doctor button
             doctor_button = QPushButton("Doctor")
             doctor_button.setStyleSheet("""
@@ -399,7 +438,7 @@ class PopupWindow(QDialog):
             """)
             guide_button.clicked.connect(self.open_user_guide)
             button_layout.addWidget(guide_button)
-            
+
             # Close button
             close_button = QPushButton("Close")
             close_button.setStyleSheet("""
@@ -425,7 +464,7 @@ class PopupWindow(QDialog):
                 button_text = "Next"
                 if popup_type.endswith("5"):  # Last popup in sequence
                     button_text = "Got it!"
-                    
+
                 next_button = QPushButton(button_text)
                 next_button.setStyleSheet("""
                     QPushButton {
@@ -441,7 +480,7 @@ class PopupWindow(QDialog):
                         background-color: #45a049;
                     }
                 """)
-                
+
                 # Connect to the appropriate next function based on the popup type
                 if popup_type == "patient1":
                     next_button.clicked.connect(self.show_patient_popup2)
@@ -463,7 +502,7 @@ class PopupWindow(QDialog):
                     next_button.clicked.connect(self.show_doctor_popup5)
                 elif popup_type == "doctor5":
                     next_button.clicked.connect(self.show_final_shared_popup)
-                
+
                 button_layout.addWidget(next_button)
             else:
                 # For any other popups
@@ -484,31 +523,31 @@ class PopupWindow(QDialog):
                 """)
                 close_button.clicked.connect(self.accept)
                 button_layout.addWidget(close_button)
-        
+
         layout.addLayout(button_layout)
-    
+
     def open_user_guide(self):
         # Close the current popup
         self.accept()
-        
+
         # Import and show the UserGuideModule
         from UserGuide import UserGuideModule
-        
+
         # Find the parent TranslationModule window to close it
         for widget in QApplication.topLevelWidgets():
             if isinstance(widget, TranslationModule):
                 # First create the user guide module
                 user_guide = UserGuideModule()
                 user_guide.showFullScreen()  # Show in full screen mode
-                
+
                 # Then close the translation module
                 widget.close()
                 return
-        
+
         # Fallback if no parent window found
         user_guide = UserGuideModule()
         user_guide.showFullScreen()  # Show in full screen mode
-    
+
     def show_final_shared_popup(self):
         self.accept()  # Close current popup
         final_popup = PopupWindow(
@@ -518,7 +557,7 @@ class PopupWindow(QDialog):
             "images/helpassets/both/seemorepopup.png"  # Path to the final shared popup image
         )
         final_popup.exec_()
-    
+
     def show_next_popup(self):
         self.accept()  # Close current popup
         second_popup = PopupWindow(
@@ -528,7 +567,7 @@ class PopupWindow(QDialog):
             "images/helpassets/both/beforepopup.png"  # Path to the image for role selection popup
         )
         second_popup.exec_()
-    
+
     # Patient tutorial sequence
     def show_patient_popup1(self):
         self.accept()  # Close current popup
@@ -539,7 +578,7 @@ class PopupWindow(QDialog):
             "images/helpassets/patient/patientpopup1.png"
         )
         popup.exec_()
-        
+
     def show_patient_popup2(self):
         self.accept()  # Close current popup
         popup = PopupWindow(
@@ -549,7 +588,7 @@ class PopupWindow(QDialog):
             "images/helpassets/patient/patientpopup2.png"
         )
         popup.exec_()
-        
+
     def show_patient_popup3(self):
         self.accept()  # Close current popup
         popup = PopupWindow(
@@ -559,7 +598,7 @@ class PopupWindow(QDialog):
             "images/helpassets/patient/patientpopup3.png"
         )
         popup.exec_()
-        
+
     def show_patient_popup4(self):
         self.accept()  # Close current popup
         popup = PopupWindow(
@@ -569,7 +608,7 @@ class PopupWindow(QDialog):
             "images/helpassets/patient/patientpopup4.png"
         )
         popup.exec_()
-        
+
     def show_patient_popup5(self):
         self.accept()  # Close current popup
         popup = PopupWindow(
@@ -579,7 +618,7 @@ class PopupWindow(QDialog):
             "images/helpassets/patient/patientpopup5.png"
         )
         popup.exec_()
-    
+
     # Doctor tutorial sequence
     def show_doctor_popup1(self):
         self.accept()  # Close current popup
@@ -590,7 +629,7 @@ class PopupWindow(QDialog):
             "images/helpassets/doctor/doctorpopup1.png"
         )
         popup.exec_()
-        
+
     def show_doctor_popup2(self):
         self.accept()  # Close current popup
         popup = PopupWindow(
@@ -600,7 +639,7 @@ class PopupWindow(QDialog):
             "images/helpassets/doctor/doctorpopup2.png"
         )
         popup.exec_()
-        
+
     def show_doctor_popup3(self):
         self.accept()  # Close current popup
         popup = PopupWindow(
@@ -610,7 +649,7 @@ class PopupWindow(QDialog):
             "images/helpassets/doctor/doctorpopup3.png"
         )
         popup.exec_()
-        
+
     def show_doctor_popup4(self):
         self.accept()  # Close current popup
         popup = PopupWindow(
@@ -620,7 +659,7 @@ class PopupWindow(QDialog):
             "images/helpassets/doctor/doctorpopup4.png"
         )
         popup.exec_()
-        
+
     def show_doctor_popup5(self):
         self.accept()  # Close current popup
         popup = PopupWindow(
@@ -637,61 +676,64 @@ class TranslationModule(QMainWindow):
         self.setWindowTitle("SalinSign Translation Module")
         self.setGeometry(0, 0, 1920, 1080)
         self.setMinimumSize(360, 640)  # Set minimum size for mobile compatibility
-        
+
         # Preloading flag - if True, don't start video yet
         self.preloaded = False
-        
+
         # Set white background for the main window
         self.setStyleSheet("background-color: white;")
-        
+
         # Initialize messages list
         self.messages = []
-        
+
         # Initialize display mode (True for text, False for sign language)
         self.text_mode = True
-        
+
         # Default camera ID
         self.current_camera_id = 0
-        
+
         # Camera switching lock to prevent race conditions
         self.camera_switching = False
-        
+
         # Detect available cameras
         self.available_cameras = get_available_cameras()
-        
+
         # Setup UI
         self.setup_ui()
-        
+
         # Load external stylesheet
         self.load_stylesheet()
-        
+
         # Setup sign language recognition
         self.sign_language_thread = None
-        
+
         # Add resize event handler
         self.resizeEvent = self.handle_resize
-        
+
         # Initialize sign recognition timing variables
         self.last_recognized_sign = None
         self.sign_buffer = ""
         self.last_sign_time = 0
-        self.sign_interval = 1500  # 1.5 seconds interval between signs
+        self.sign_interval = 1500  # 2 seconds interval between signs
         self.current_sign = None
         self.sign_start_time = 0
-        self.sign_hold_time = 700  # 0.7 seconds to hold a sign before sending
-        
+        self.sign_hold_time = 700  # 1 second to hold a sign before sending
+
         # Setup video stream (will be properly initialized when the UI is shown)
         self.video_thread = None
-        
+
         # Initialize translation timer
         self.translation_timer = QTimer()
         self.translation_timer.setSingleShot(True)
         self.translation_timer.timeout.connect(self.move_translation_to_chat)
         self.last_gesture_time = 0
-        
-        # Buffer of signs for word segmentation
-        self.sign_sequence = ""
-        
+
+        # Initialize word spacing timer
+        self.word_spacing_timer = QTimer()
+        self.word_spacing_timer.setSingleShot(True)
+        self.word_spacing_timer.timeout.connect(self.add_space)
+        self.last_gesture_time = 0
+
         # Flag to track navigation state
         self._navigating = False
 
@@ -699,22 +741,22 @@ class TranslationModule(QMainWindow):
         # Main central widget
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
-        
+
         # Create scroll area
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setCentralWidget(self.scroll_area)
-        
+
         # Scroll area widget
         self.scroll_widget = QWidget()
         self.scroll_area.setWidget(self.scroll_widget)
-        
+
         # Main vertical layout
         self.main_layout = QVBoxLayout(self.scroll_widget)
         self.main_layout.setContentsMargins(20, 5, 20, 20)
         self.main_layout.setSpacing(5)
-        
+
         # Back Button Layout
         button_header = QHBoxLayout()
         button_header.setContentsMargins(0, 0, 0, 0)
@@ -724,10 +766,10 @@ class TranslationModule(QMainWindow):
         self.back_button.setCursor(QCursor(Qt.PointingHandCursor))
         self.back_button.mousePressEvent = self.go_back
         button_header.addWidget(self.back_button, alignment=Qt.AlignLeft)
-        
+
         # Add stretch to push the tooltip button to the right
         button_header.addStretch()
-        
+
         # Add tooltip button to the right
         self.tooltip_button = QLabel()
         self.tooltip_button.setObjectName("tooltipButton")
@@ -735,9 +777,9 @@ class TranslationModule(QMainWindow):
         self.tooltip_button.setCursor(QCursor(Qt.PointingHandCursor))
         self.tooltip_button.mousePressEvent = self.show_tooltip
         button_header.addWidget(self.tooltip_button, alignment=Qt.AlignRight)
-        
+
         self.main_layout.addLayout(button_header)
-        
+
         # Header Image Layout
         header_container = QHBoxLayout()
         header_container.setContentsMargins(0, 0, 0, 0)
@@ -754,32 +796,32 @@ class TranslationModule(QMainWindow):
         """)
         header_container.addWidget(self.header_image, alignment=Qt.AlignCenter)
         self.main_layout.addLayout(header_container)
-        
+
         # Add minimal spacing after the header
         self.main_layout.addSpacing(5)
-        
+
         # Container Layout (for the two main boxes)
         self.container = QHBoxLayout()
         self.container.setSpacing(20)
-        
+
         # Box 1 - Video Stream and Translation
         self.box1 = QFrame()
         self.box1.setObjectName("box1")
         self.box1_layout = QVBoxLayout(self.box1)
         self.box1_layout.setContentsMargins(20, 20, 20, 20)
         self.box1_layout.setSpacing(15)
-        
+
         # Box 1 Header
         self.stream_header = QLabel()
         self.stream_header.setPixmap(QPixmap("images/Stream.png").scaledToWidth(300, Qt.SmoothTransformation))
         self.stream_header.setAlignment(Qt.AlignCenter)
         self.box1_layout.addWidget(self.stream_header)
-        
+
         # Camera selection dropdown
         camera_selection_layout = QHBoxLayout()
         camera_selection_layout.setContentsMargins(0, 0, 0, 0)
         camera_selection_layout.setSpacing(10)
-        
+
         camera_label = QLabel("Camera Source:")
         camera_label.setStyleSheet("""
             QLabel {
@@ -789,7 +831,7 @@ class TranslationModule(QMainWindow):
             }
         """)
         camera_selection_layout.addWidget(camera_label)
-        
+
         self.camera_dropdown = QComboBox()
         self.camera_dropdown.setStyleSheet("""
             QComboBox {
@@ -805,24 +847,24 @@ class TranslationModule(QMainWindow):
                 border-left: 1px solid #ccc;
             }
         """)
-        
+
         # Add available cameras to dropdown
         for camera in self.available_cameras:
             self.camera_dropdown.addItem(camera["name"], camera["id"])
-        
+
         # Connect dropdown change event
         self.camera_dropdown.currentIndexChanged.connect(self.camera_selected)
         camera_selection_layout.addWidget(self.camera_dropdown)
-        
+
         self.box1_layout.addLayout(camera_selection_layout)
-        
+
         # Video Stream Placeholder
         self.video_placeholder = QLabel("Loading Video Stream...")
         self.video_placeholder.setObjectName("videoPlaceholder")
         self.video_placeholder.setAlignment(Qt.AlignCenter)
         self.video_placeholder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.box1_layout.addWidget(self.video_placeholder)
-        
+
         # Translation Text Box
         self.translation_box = QLineEdit()
         self.translation_box.setReadOnly(True)
@@ -839,23 +881,23 @@ class TranslationModule(QMainWindow):
             }
         """)
         self.box1_layout.addWidget(self.translation_box)
-        
+
         # Add Box 1 to container
         self.container.addWidget(self.box1)
-        
+
         # Box 2 - Chat and Sign Language Display
         self.box2 = QFrame()
         self.box2.setObjectName("box2")
         self.box2_layout = QVBoxLayout(self.box2)
         self.box2_layout.setContentsMargins(20, 20, 20, 20)
         self.box2_layout.setSpacing(15)
-        
+
         # Box 2 Header
         self.chat_header = QLabel()
         self.chat_header.setPixmap(QPixmap("images/Chatbox.png").scaledToWidth(200, Qt.SmoothTransformation))
         self.chat_header.setAlignment(Qt.AlignCenter)
         self.box2_layout.addWidget(self.chat_header)
-        
+
         # Chat Box
         self.chat_box = QTextEdit()
         self.chat_box.setReadOnly(True)
@@ -872,7 +914,7 @@ class TranslationModule(QMainWindow):
             }
         """)
         self.box2_layout.addWidget(self.chat_box)
-        
+
         # Sign Language Display Area
         self.sign_display_scroll = QScrollArea()
         self.sign_display_scroll.setWidgetResizable(True)
@@ -898,7 +940,7 @@ class TranslationModule(QMainWindow):
                 height: 0px;
             }
         """)
-        
+
         self.sign_display = QWidget()
         self.sign_display.setObjectName("signDisplay")
         self.sign_display.setStyleSheet("""
@@ -910,22 +952,121 @@ class TranslationModule(QMainWindow):
         self.sign_display_layout = QVBoxLayout(self.sign_display)
         self.sign_display_layout.setSpacing(5)
         self.sign_display_layout.setContentsMargins(5, 5, 5, 5)
-        
+
         self.sign_display_scroll.setWidget(self.sign_display)
         self.sign_display_scroll.setMinimumHeight(250)
         self.sign_display_scroll.hide()  # Hide sign display by default
         self.box2_layout.addWidget(self.sign_display_scroll)
-        
+
+        # Add predefined phrases for doctor
+        predefined_phrases_layout = QVBoxLayout()
+        predefined_phrases_layout.setContentsMargins(0, 0, 0, 5)
+        predefined_phrases_layout.setSpacing(5)
+
+        # Create a flow layout for phrase buttons
+        phrases_container = QWidget()
+        phrases_container.setObjectName("phrasesContainer")
+        phrases_flow_layout = QHBoxLayout(phrases_container)
+        phrases_flow_layout.setSpacing(8)
+        # Increase vertical margins to add space above and below buttons
+        phrases_flow_layout.setContentsMargins(0, 8, 0, 8)
+
+        # List of predefined phrases
+        phrases = [
+            "Where does it hurt?",
+            "How long have you felt this?",
+            "I'll check your vital signs now.",
+            "You need medicine — I'll give you instructions.",
+            "Any questions before we finish?"
+        ]
+
+        # Create and add buttons for each phrase
+        for phrase in phrases:
+            button = QPushButton(phrase)
+            button.setStyleSheet("""
+                QPushButton {
+                    padding: 8px 12px;
+                    background-color: #e8f5ff;
+                    color: #2a70a5;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    min-height: 24px;
+                    text-align: center;
+                }
+                QPushButton:hover {
+                    background-color: #cce7ff;
+                    color: #0058a5;
+                }
+            """)
+            button.setCursor(QCursor(Qt.PointingHandCursor))
+            # Connect button click to send the phrase as a doctor message
+            button.clicked.connect(lambda checked=False, text=phrase: self.send_message("Doctor", text))
+            phrases_flow_layout.addWidget(button)
+
+        # Add horizontal scroll area that takes minimal space
+        phrases_scroll = QScrollArea()
+        phrases_scroll.setWidgetResizable(True)
+        phrases_scroll.setWidget(phrases_container)
+        phrases_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        phrases_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Increase scroll area height to provide more space
+        phrases_scroll.setMaximumHeight(60)
+        phrases_scroll.setMinimumHeight(60)
+        phrases_scroll.setStyleSheet("""
+            QScrollArea {
+                background-color: #f5f5f5;
+                border: 1px solid #ddd;
+                border-radius: 10px;
+                padding: 0px;
+            }
+            QScrollBar:horizontal {
+                height: 6px;
+                background: transparent;
+                margin: 0px 0px 0px 0px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: rgba(128, 128, 128, 0.2);
+                min-width: 40px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: rgba(128, 128, 128, 0.5);
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal,
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: transparent;
+                width: 0px;
+                height: 0px;
+            }
+        """)
+
+        # Set styling for the phrases container too
+        phrases_container.setStyleSheet("""
+            QWidget#phrasesContainer {
+                background-color: #f5f5f5;
+                border-radius: 9px; /* 1px less than scroll area to fit nicely */
+            }
+        """)
+
+        # Increase container height to match the new spacing
+        phrases_container.setMaximumHeight(60)
+
+        predefined_phrases_layout.addWidget(phrases_scroll)
+        self.box2_layout.addLayout(predefined_phrases_layout)
+
         # Input Container for User 2 (Doctor)
         self.input_container2 = QHBoxLayout()
         self.input_user2 = QLineEdit()
         self.input_user2.setPlaceholderText("Doctor Type here...")
         self.input_user2.returnPressed.connect(lambda: self.send_message("Doctor", self.input_user2.text()))
-        
+
         self.send_button2 = QPushButton("Send")
         self.send_button2.setCursor(QCursor(Qt.PointingHandCursor))
         self.send_button2.clicked.connect(lambda: self.send_message("Doctor", self.input_user2.text()))
-        
+
         # Add display mode toggle
         self.display_mode_toggle = QCheckBox("Text Mode")
         self.display_mode_toggle.setChecked(True)  # Set Text Mode as default
@@ -953,7 +1094,7 @@ class TranslationModule(QMainWindow):
                 border-radius: 3px;
             }
         """)
-        
+
         # Add clear chat button
         self.clear_chat_button = QPushButton("Clear Chat")
         self.clear_chat_button.setCursor(QCursor(Qt.PointingHandCursor))
@@ -973,30 +1114,30 @@ class TranslationModule(QMainWindow):
                 background-color: #ff6666;
             }
         """)
-        
+
         self.input_container2.addWidget(self.input_user2)
         self.input_container2.addWidget(self.send_button2)
         self.input_container2.addWidget(self.display_mode_toggle)
         self.input_container2.addWidget(self.clear_chat_button)
         self.box2_layout.addLayout(self.input_container2)
-        
+
         # Add Box 2 to container
         self.container.addWidget(self.box2)
-        
+
         # Add container to main layout
         self.main_layout.addLayout(self.container)
-        
+
     def handle_resize(self, event):
         width = event.size().width()
         height = event.size().height()
-        
+
         # Maintain original layout at 1920x1080
         if width >= 1920 and height >= 1080:
             self.container.setDirection(QHBoxLayout.LeftToRight)
             self.box1.setMinimumWidth(0)
             self.box2.setMinimumWidth(0)
             return
-            
+
         # Switch to vertical layout for mobile screens
         if width < 768:
             self.container.setDirection(QVBoxLayout.TopToBottom)
@@ -1015,7 +1156,7 @@ class TranslationModule(QMainWindow):
             self.main_layout.setContentsMargins(20, 20, 20, 20)
             self.box1_layout.setContentsMargins(20, 20, 20, 20)
             self.box2_layout.setContentsMargins(20, 20, 20, 20)
-            
+
         # Scale images based on screen width
         scale_factor = min(width / 1920, 1.0)
         # Reduce the logo size by using a smaller scale factor
@@ -1023,30 +1164,30 @@ class TranslationModule(QMainWindow):
         self.header_image.setPixmap(QPixmap("images/Translation.png").scaledToWidth(int(600 * logo_scale_factor), Qt.SmoothTransformation))
         self.stream_header.setPixmap(QPixmap("images/Stream.png").scaledToWidth(int(300 * scale_factor), Qt.SmoothTransformation))
         self.chat_header.setPixmap(QPixmap("images/Chatbox.png").scaledToWidth(int(235 * scale_factor), Qt.SmoothTransformation))
-        
+
         # Update font sizes
         font_size = max(12, int(14 * scale_factor))
         self.input_user2.setStyleSheet(f"font-size: {font_size}px;")
         self.chat_box.setStyleSheet(f"font-size: {font_size}px;")
-        
+
         # Update button sizes
         button_width = max(80, int(100 * scale_factor))
         self.send_button2.setMinimumWidth(button_width)
-        
+
         # Update video placeholder size
         if width < 768:
             video_height = int(width * 0.75)  # 4:3 aspect ratio
         else:
             video_height = int(height * 0.4)
         self.video_placeholder.setMinimumHeight(video_height)
-        
+
         # Update chat box size
         if width < 768:
             chat_height = int(height * 0.4)
         else:
             chat_height = int(height * 0.4)
         self.chat_box.setMinimumHeight(chat_height)
-        
+
         # Update sign display size if visible
         if not self.text_mode:
             self.sign_display.setMinimumWidth(self.box2.width() - 50)
@@ -1056,7 +1197,7 @@ class TranslationModule(QMainWindow):
     def load_stylesheet(self):
         """Load the external stylesheet"""
         style_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "translation_style.qss")
-        
+
         if os.path.exists(style_path):
             with open(style_path, "r") as f:
                 self.setStyleSheet(f.read())
@@ -1064,7 +1205,7 @@ class TranslationModule(QMainWindow):
             print(f"Warning: Could not find stylesheet at {style_path}")
             # Fall back to basic styling
             self.apply_basic_styles()
-            
+
     def apply_basic_styles(self):
         """Apply basic styling if the stylesheet file is not found"""
         style = """
@@ -1109,15 +1250,15 @@ class TranslationModule(QMainWindow):
             font-size: 14px;
         }
         """
-        
+
         self.setStyleSheet(style)
-        
+
     def convert_text_to_sign(self, text):
         """Convert text to sign language images"""
         sign_images = []
         base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images", "signimages")
         print(f"Base path for sign images: {base_path}")  # Debug print
-        
+
         for char in text.upper():
             if char.isalpha() or char.isdigit():
                 # Check if image exists in signimages directory
@@ -1128,7 +1269,7 @@ class TranslationModule(QMainWindow):
                     sign_images.append(image_path)
                 else:
                     print(f"Image not found for {char}")  # Debug print
-        
+
         print(f"Total images found: {len(sign_images)}")  # Debug print
         return sign_images
 
@@ -1154,21 +1295,21 @@ class TranslationModule(QMainWindow):
             print("No images to display")
             self.clear_sign_display()
             return
-            
+
         print(f"Displaying {len(image_paths)} images")
-        
+
         # Clear existing display first
         self.clear_sign_display()
-        
+
         # Available width for images in a row
         max_row_width = self.sign_display.width() - 30  # Account for margins
         default_image_size = 120  # Default image size
         min_image_size = 50  # Minimum size we'll reduce to
-        
+
         # Group images by word (each word is followed by None)
         words = []
         current_word = []
-        
+
         for img_path in image_paths:
             if img_path is None:  # Word boundary
                 if current_word:  # Only add non-empty words
@@ -1176,29 +1317,29 @@ class TranslationModule(QMainWindow):
                     current_word = []
             else:
                 current_word.append(img_path)
-        
+
         # Add the last word if there is one
         if current_word:
             words.append(current_word)
-        
+
         current_row_layout = QHBoxLayout()
         current_row_layout.setSpacing(5)
         current_row_layout.setContentsMargins(0, 0, 0, 0)
         current_row_layout.setAlignment(Qt.AlignLeft)
         current_row_width = 0
-        
+
         # Process each word
         for word_images in words:
             # Check if this word would fit at default size
             word_width = len(word_images) * (default_image_size + 5) - 5  # Account for spacing
-            
+
             # If word doesn't fit at default size, calculate a smaller size
             image_size = default_image_size
             if word_width > max_row_width:
                 # Calculate new size that will make the word fit
                 image_size = max(min_image_size, int((max_row_width - (len(word_images) - 1) * 5) / len(word_images)))
                 print(f"Reducing image size to {image_size} for word of length {len(word_images)}")
-            
+
             # Check if we need to start a new row for this word
             word_scaled_width = len(word_images) * (image_size + 5) - 5
             if current_row_width + word_scaled_width > max_row_width and current_row_layout.count() > 0:
@@ -1209,7 +1350,7 @@ class TranslationModule(QMainWindow):
                 current_row_layout.setContentsMargins(0, 0, 0, 0)
                 current_row_layout.setAlignment(Qt.AlignLeft)
                 current_row_width = 0
-            
+
             # Add all images for this word
             for img_path in word_images:
                 image_label = QLabel()
@@ -1217,7 +1358,7 @@ class TranslationModule(QMainWindow):
                 if pixmap.isNull():
                     print(f"Failed to load image: {img_path}")
                     continue
-                
+
                 # Scale the image to the calculated size
                 scaled_pixmap = pixmap.scaled(image_size, image_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 image_label.setPixmap(scaled_pixmap)
@@ -1225,17 +1366,17 @@ class TranslationModule(QMainWindow):
                 image_label.setFixedSize(image_size, image_size)
                 current_row_layout.addWidget(image_label)
                 current_row_width += image_size + 5
-            
+
             # Add space after each word (if not the last word)
             spacer = QLabel()
             spacer.setFixedSize(10, image_size)  # Smaller visual space between words
             current_row_layout.addWidget(spacer)
             current_row_width += 10
-        
+
         # Add the last row if it has any images
         if current_row_layout.count() > 0:
             self.sign_display_layout.addLayout(current_row_layout)
-        
+
         # Add stretch at the bottom to push content to the top
         self.sign_display_layout.addStretch()
 
@@ -1243,7 +1384,7 @@ class TranslationModule(QMainWindow):
         """Toggle between text and sign language display modes"""
         self.text_mode = bool(state)
         self.display_mode_toggle.setText("Text Mode" if self.text_mode else "Sign Mode")
-        
+
         # Update the display based on the current mode
         if self.text_mode:
             # Show text messages and hide sign language
@@ -1254,21 +1395,21 @@ class TranslationModule(QMainWindow):
             # Hide text messages and show sign language
             self.chat_box.hide()
             self.sign_display_scroll.show()
-            
+
             # Ensure the sign display has its layout updated before showing
             self.sign_display_scroll.setWidgetResizable(True)
             self.sign_display.setMinimumWidth(self.box2.width() - 50)  # Allow enough width for the signs
-            
+
             # Clear and update sign language display for all messages
             self.update_sign_display_for_all_messages()
-    
+
     def update_sign_display_for_all_messages(self):
         """Update sign language display for all messages"""
         self.clear_sign_display()
-        
+
         # Get all messages from the doctor
         doctor_messages = [msg["text"] for msg in self.messages if msg["user"] == "Doctor"]
-        
+
         if doctor_messages:
             # Convert all messages to sign language
             all_sign_images = []
@@ -1279,21 +1420,21 @@ class TranslationModule(QMainWindow):
                     sign_images = self.convert_text_to_sign(word)
                     all_sign_images.extend(sign_images)
                     all_sign_images.append(None)  # Add word boundary marker
-            
+
             # Ensure sign display has correct size before displaying images
             self.sign_display.updateGeometry()
             QApplication.processEvents()
-            
+
             # Display all sign images
             self.display_sign_images(all_sign_images)
-    
+
     def send_message(self, user, message):
         if not message.strip():
             return
-            
+
         # Add message to list
         self.messages.append({"user": user, "text": message})
-        
+
         if user == "Doctor":
             if not self.text_mode:
                 # In sign mode, only show the latest message
@@ -1314,11 +1455,11 @@ class TranslationModule(QMainWindow):
             # For patient messages, only update in text mode
             if self.text_mode:
                 self.display_messages()
-    
+
     def display_messages(self):
         # Clear the chatbox
         self.chat_box.clear()
-        
+
         # Create HTML for all messages with inline styles to ensure bubbles appear
         html_content = """
         <html>
@@ -1394,18 +1535,18 @@ class TranslationModule(QMainWindow):
         </head>
         <body>
         """
-        
+
         current_user = None
         for msg in self.messages:
             # Add sender label only when the user changes
             show_sender = (current_user != msg['user'])
             current_user = msg['user']
-            
+
             if msg['user'] == "Patient":
                 # Patient message - left aligned
                 if show_sender:
                     html_content += f'<div class="message-sender patient-sender">{msg["user"]}</div>'
-                
+
                 html_content += f"""
                 <div class="message-row">
                     <div class="message-container-left">
@@ -1420,7 +1561,7 @@ class TranslationModule(QMainWindow):
                 # Doctor message - right aligned
                 if show_sender:
                     html_content += f'<div class="message-sender doctor-sender">{msg["user"]}</div>'
-                
+
                 html_content += f"""
                 <div class="message-row">
                     <div class="message-container-right">
@@ -1431,120 +1572,140 @@ class TranslationModule(QMainWindow):
                     <div class="clear"></div>
                 </div>
                 """
-        
+
         # Add some spacing at the bottom for better scrolling
         html_content += """
         <div style="height: 20px"></div>
         </body>
         </html>
         """
-        
+
         # Set the HTML content
         self.chat_box.setHtml(html_content)
-        
+
         # Scroll to the bottom of the chat box
         cursor = self.chat_box.textCursor()
         cursor.movePosition(cursor.End)
         self.chat_box.setTextCursor(cursor)
-    
+
     def go_back(self, event):
         """Return to the main menu when the back button is clicked"""
         try:
             # Set a flag to prevent re-entering this method
-            if self._navigating:
+            if hasattr(self, '_navigating') and self._navigating:
                 print("Navigation already in progress, ignoring request")
                 return
             self._navigating = True
 
-            # If camera is currently switching, give it a moment to complete
-            if self.camera_switching:
-                print("Camera switch in progress, waiting briefly...")
-                # Sleep for a short time to let camera switching complete
-                for _ in range(5):  # Try for up to 500ms
-                    if not self.camera_switching:
-                        break
-                    QApplication.processEvents()
-                    self.msleep(100)
+            print("Starting navigation back to main menu...")
 
-            # First, stop video processing to free up resources
-            print("Stopping sign language thread...")
-            if self.sign_language_thread is not None:
-                try:
-                    self.sign_language_thread.running = False  # Force running flag to False
-                    self.sign_language_thread.stop()
-                    # Use a timeout to avoid hanging if thread doesn't respond
-                    if not self.sign_language_thread.wait(3000):  # 3 second timeout
-                        print("Warning: Sign language thread did not stop cleanly")
-                    self.sign_language_thread = None
-                except Exception as e:
-                    print(f"Error stopping sign language thread: {e}")
-            
-            print("Stopping video thread...")
-            if self.video_thread is not None:
-                try:
-                    self.video_thread.running = False  # Force running flag to False
-                    self.video_thread.stop()
-                    # Use a timeout to avoid hanging if thread doesn't respond
-                    if not self.video_thread.wait(3000):  # 3 second timeout
-                        print("Warning: Video thread did not stop cleanly")
-                    self.video_thread = None
-                except Exception as e:
-                    print(f"Error stopping video thread: {e}")
-            
-            # Explicitly stop timer
-            print("Stopping timer...")
-            if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
-                try:
+            # First, make sure all timers are stopped
+            try:
+                if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
                     self.translation_timer.stop()
-                except Exception as e:
-                    print(f"Error stopping translation timer: {e}")
+                if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
+                    self.word_spacing_timer.stop()
+            except Exception as e:
+                print(f"Error stopping timers: {e}")
 
-            # Delay the actual navigation to give threads time to clean up
-            def perform_navigation():
-                try:
-                    # Close current window instead of hiding it
-                    self.close()
-                    
-                    # Import the main menu
-                    from MainMenu import Ui_MainWindow
-                    
-                    # Close any other windows like Sign Language Library module
-                    for widget in QApplication.topLevelWidgets():
-                        if isinstance(widget, QMainWindow) and widget != self:
-                            widget.close()
-                    
-                    # Create a new MainWindow instance
-                    main_window = QMainWindow()
-                    ui = Ui_MainWindow()
-                    ui.setupUi(main_window)
-                    main_window.showFullScreen()
-                except Exception as e:
-                    print(f"Error during navigation: {e}")
-                    # Ensure we still try to show the main menu even if there's an error
-                    try:
-                        from MainMenu import Ui_MainWindow
-                        main_window = QMainWindow()
-                        ui = Ui_MainWindow()
-                        ui.setupUi(main_window)
-                        main_window.showFullScreen()
-                    except Exception as e2:
-                        print(f"Critical error returning to main menu: {e2}")
-            
-            # Use a longer delay to give threads more time to clean up
-            QTimer.singleShot(500, perform_navigation)
-            
-        except Exception as e:
-            print(f"Error during back button handling: {e}")
-            # Fallback to try to show the main menu
+            # Disconnect signals to prevent any callback issues
+            try:
+                if self.sign_language_thread is not None:
+                    self.sign_language_thread.update_frame.disconnect()
+                    self.sign_language_thread.update_text.disconnect()
+            except Exception as e:
+                print(f"Error disconnecting signals: {e}")
+
+            # Stop the sign language thread
+            try:
+                print("Stopping sign language thread...")
+                if self.sign_language_thread is not None:
+                    self.sign_language_thread.running = False
+                    self.sign_language_thread.stop()
+                    # Give it a reasonable time to stop
+                    for i in range(10):  # Try for about 1 second
+                        if not self.sign_language_thread.isRunning():
+                            break
+                        self.msleep(100)
+
+                    # If it's still running, terminate it
+                    if self.sign_language_thread.isRunning():
+                        print("Forcing thread termination...")
+                        self.sign_language_thread.terminate()
+                    self.sign_language_thread = None
+            except Exception as e:
+                print(f"Error stopping sign language thread: {e}")
+
+            # Stop the video thread if it exists
+            try:
+                print("Stopping video thread...")
+                if self.video_thread is not None:
+                    self.video_thread.running = False
+                    self.video_thread.stop()
+                    # Give it a reasonable time to stop
+                    for i in range(10):  # Try for about 1 second
+                        if not self.video_thread.isRunning():
+                            break
+                        self.msleep(100)
+
+                    # If it's still running, terminate it
+                    if self.video_thread.isRunning():
+                        print("Forcing video thread termination...")
+                        self.video_thread.terminate()
+                    self.video_thread = None
+            except Exception as e:
+                print(f"Error stopping video thread: {e}")
+
+            # Clear data and run garbage collection
+            try:
+                self.clear_chat()
+                # Force garbage collection
+                gc.collect()
+            except Exception as e:
+                print(f"Error clearing data: {e}")
+
+            # Set variables to None to help garbage collection
+            try:
+                self.sign_language_thread = None
+                self.video_thread = None
+            except Exception as e:
+                print(f"Error nullifying thread references: {e}")
+
+            # Import MainMenu ahead of time to make sure it's ready
             try:
                 from MainMenu import Ui_MainWindow
+                print("MainMenu imported successfully")
+            except Exception as e:
+                print(f"Error importing MainMenu: {e}")
+
+            # Create a new MainWindow instance before closing this one
+            try:
                 main_window = QMainWindow()
                 ui = Ui_MainWindow()
                 ui.setupUi(main_window)
+            except Exception as e:
+                print(f"Error creating main menu: {e}")
+
+            # Close current window and show main menu
+            try:
+                print("Showing main menu...")
                 main_window.showFullScreen()
-            except Exception as e2:
-                print(f"Critical error returning to main menu: {e2}")
-                
+                print("Closing translation module...")
+                self.close()
+            except Exception as e:
+                print(f"Error showing main menu: {e}")
+                # Try simpler approach
+                self.close()
+
+        except Exception as e:
+            print(f"Critical error in go_back: {e}")
+            self._navigating = False
+            # Last resort - just try to close
+            try:
+                self.close()
+            except:
+                pass
+
     def msleep(self, msecs):
         """Helper method to sleep for milliseconds without blocking UI"""
         deadline = QTime.currentTime().addMSecs(msecs)
@@ -1555,139 +1716,54 @@ class TranslationModule(QMainWindow):
         """Update the video placeholder with a new frame"""
         scaled_image = image.scaled(self.video_placeholder.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_placeholder.setPixmap(QPixmap.fromImage(scaled_image))
-    
+
     def setup_video_stream(self):
         """Set up the sign language recognition and video streaming"""
         self.sign_language_thread = SignLanguageThread(self.current_camera_id)
         self.sign_language_thread.update_frame.connect(self.update_video_frame)
         self.sign_language_thread.update_text.connect(self.handle_recognized_sign)
         self.sign_language_thread.start()
-    
+
     def handle_recognized_sign(self, sign):
         """Handle recognized sign language gestures with timing control"""
         current_time = QTime.currentTime().msecsSinceStartOfDay()
-        
-        # Update last gesture time
+
+        # Update last gesture time and restart word spacing timer
         self.last_gesture_time = current_time
-        
+        self.word_spacing_timer.start(2000)  # 2 seconds for word spacing
+
         # If this is a new sign, start tracking it
         if sign != self.current_sign:
             self.current_sign = sign
             self.sign_start_time = current_time
             return
-            
+
         # If we're still holding the same sign
         if sign == self.current_sign:
             # Check if we've held the sign long enough
             if current_time - self.sign_start_time >= self.sign_hold_time:
                 # Check if enough time has passed since the last sent sign
                 if current_time - self.last_sign_time >= self.sign_interval:
-                    # Special medical terms and phrases that should be treated as whole words
-                    special_terms = ["Pain", "Sick", "Headache", "Dizzy", "Vomit", "Diarrhea", "Cough", "Allergy",
-                                  "Strong", "Weak", "Stomachache", "Sore Throat", "Injury", 
-                                  "Breathing Difficulty", "Food Poisoning", "Wound", "Stress",
-                                  "Conditions", "Fever", "Diabetes", "Back Pain", "Cold", "Stroke",
-                                  "Blood Pressure", "Heartache", "Hello", "Good Morning", "Good Afternooon",
-                                  "Good Evening", "Thank You", "Good Bye"]
-                    
-                    # Add the sign to our sequence, with special handling for medical terms
-                    if sign in special_terms and self.sign_sequence and self.sign_sequence[-1:] != ' ':
-                        # Add a space before a special term if not already present
-                        self.sign_sequence += " " + sign
+                    # Get current text and append new sign
+                    current_text = self.translation_box.text()
+                    if current_text:
+                        new_text = f"{current_text}{sign}"
                     else:
-                        self.sign_sequence += sign
-                    
-                    # Segment the accumulated signs into words
-                    segmented_text = self.segment_words(self.sign_sequence)
-                    
-                    # Update the translation box with segmented text
-                    self.translation_box.setText(segmented_text)
-                    
+                        new_text = sign
+                    self.translation_box.setText(new_text)
                     self.last_sign_time = current_time
                     self.last_recognized_sign = sign
                     self.sign_buffer = sign
-                    
+
                     # Restart the translation timer
                     self.translation_timer.start(5000)  # 5 seconds
 
-    def segment_words(self, text):
-        """Segment a sequence of characters into words using wordninja"""
-        # Special medical terms and phrases that should be treated as whole words
-        special_terms = ["Pain", "Sick", "Headache", "Dizzy", "Vomit", "Diarrhea", "Cough", "Allergy",
-                       "Strong", "Weak", "Stomachache", "Sore Throat", "Injury", 
-                       "Breathing Difficulty", "Food Poisoning", "Wound", "Stress",
-                       "Conditions", "Fever", "Diabetes", "Back Pain", "Colds", "Stroke",
-                       "Blood Pressure", "Heartache", "Hello", "Good Morning", "Good Afternooon",
-                       "Good Evening", "Thank You", "Good Bye"]
-        
-        # Process the text to find and separate special terms
-        result = []
-        remaining_text = text
-        
-        # Flag to track if any special term was found
-        found_special_term = False
-        
-        # Check for each special term in the text
-        for term in special_terms:
-            if term in remaining_text:
-                # Split the text where the term appears
-                parts = remaining_text.split(term)
-                
-                # Process each part before and after the term
-                for i, part in enumerate(parts):
-                    # Skip empty parts
-                    if not part:
-                        continue
-                        
-                    # Add the non-empty part for further processing
-                    if part.strip():
-                        result.append(part)
-                    
-                    # Add the term after each part except the last one
-                    if i < len(parts) - 1:
-                        result.append(term)
-                
-                found_special_term = True
-                break  # Process one term at a time for simplicity
-        
-        # If no special terms were found, just use wordninja on the whole text
-        if not found_special_term:
-            try:
-                # Extract just alphabetic characters for segmentation
-                alpha_only = ''.join(c for c in text if c.isalpha())
-                
-                if not alpha_only:
-                    return text
-                    
-                # Segment the text using wordninja
-                segmented = wordninja.split(alpha_only)
-                
-                # Join with spaces
-                return " ".join(segmented)
-            except Exception as e:
-                print(f"Error in word segmentation: {e}")
-                return text  # Return original text if segmentation fails
-        
-        # Process each remaining part with wordninja if it's not a special term
-        final_result = []
-        for part in result:
-            # Skip processing if this part is a special term
-            if part in special_terms:
-                final_result.append(part)
-            else:
-                try:
-                    # Use wordninja for this part
-                    alpha_only = ''.join(c for c in part if c.isalpha())
-                    if alpha_only:
-                        segmented = wordninja.split(alpha_only)
-                        final_result.extend(segmented)
-                except Exception as e:
-                    print(f"Error segmenting part '{part}': {e}")
-                    final_result.append(part)
-        
-        # Join all parts with spaces
-        return " ".join(final_result)
-    
+    def add_space(self):
+        """Add a space to the translation text"""
+        current_text = self.translation_box.text()
+        if current_text and not current_text.endswith(' '):
+            self.translation_box.setText(f"{current_text} ")
+
     def move_translation_to_chat(self):
         """Move the translation text to the chat box and clear the translation box"""
         translation_text = self.translation_box.text()
@@ -1696,20 +1772,18 @@ class TranslationModule(QMainWindow):
             self.send_message("Patient", translation_text)
             # Clear the translation box
             self.translation_box.clear()
-            # Reset the sign sequence
-            self.sign_sequence = ""
             # Clear the sign language display
             self.clear_sign_display()
-    
+
     def showEvent(self, event):
         """Start video streaming when the window is shown"""
         super().showEvent(event)
-        
+
         # Only start video stream if not preloaded
         if not self.preloaded:
             # Use a small delay to let the UI render first
             QTimer.singleShot(100, self.setup_video_stream)
-            
+
             # Show a loading message while camera initializes
             self.video_placeholder.setText("Initializing camera...")
             self.video_placeholder.setStyleSheet("""
@@ -1720,83 +1794,194 @@ class TranslationModule(QMainWindow):
                     qproperty-alignment: AlignCenter;
                 }
             """)
-            
+
             # Update UI immediately
             QApplication.processEvents()
-    
+
     def closeEvent(self, event):
         """Clean up resources when closing the window"""
+        print("Translation module closeEvent triggered")
         try:
-            if self.sign_language_thread is not None:
-                self.sign_language_thread.stop()
-                # Use timeout to prevent hanging
-                if not self.sign_language_thread.wait(2000):  # 2 second timeout
-                    print("Warning: Sign language thread did not stop cleanly on close")
+            # Disconnect all signals first to prevent callbacks during cleanup
+            try:
+                if self.sign_language_thread is not None:
+                    self.sign_language_thread.update_frame.disconnect()
+                    self.sign_language_thread.update_text.disconnect()
+            except Exception as e:
+                print(f"Error disconnecting signals: {e}")
+
+            # Stop all timers
+            try:
+                if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
+                    self.translation_timer.stop()
+                if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
+                    self.word_spacing_timer.stop()
+            except Exception as e:
+                print(f"Error stopping timers: {e}")
+
+            # Stop the sign language thread
+            try:
+                if self.sign_language_thread is not None:
+                    self.sign_language_thread.running = False
+                    self.sign_language_thread.stop()
+                    # Controlled wait with timeout
+                    for i in range(10):  # Try for about 1 second
+                        if not self.sign_language_thread.isRunning():
+                            break
+                        self.msleep(100)
+
+                    # If it's still running, terminate it
+                    if self.sign_language_thread.isRunning():
+                        print("Forcing sign language thread termination")
+                        self.sign_language_thread.terminate()
+                    # Set to None to help garbage collection
+                    self.sign_language_thread = None
+            except Exception as e:
+                print(f"Error stopping sign language thread: {e}")
+
+            # Stop the video thread
+            try:
+                if self.video_thread is not None:
+                    self.video_thread.running = False
+                    self.video_thread.stop()
+                    # Controlled wait with timeout
+                    for i in range(10):  # Try for about 1 second
+                        if not self.video_thread.isRunning():
+                            break
+                        self.msleep(100)
+
+                    # If it's still running, terminate it
+                    if self.video_thread.isRunning():
+                        print("Forcing video thread termination")
+                        self.video_thread.terminate()
+                    # Set to None to help garbage collection
+                    self.video_thread = None
+            except Exception as e:
+                print(f"Error stopping video thread: {e}")
+
+            # Clear data structures
+            try:
+                # Clear messages and free resources
+                self.messages = []
+
+                # Clear widgets if possible
+                if hasattr(self, 'chat_box'):
+                    self.chat_box.clear()
+                if hasattr(self, 'translation_box'):
+                    self.translation_box.clear()
+                if hasattr(self, 'sign_display_layout'):
+                    self.clear_sign_display()
+            except Exception as e:
+                print(f"Error clearing data structures: {e}")
+
+            # Remove any remaining references
+            try:
+                # Delete remaining references
                 self.sign_language_thread = None
-                
-            if self.video_thread is not None:
-                self.video_thread.stop()
-                # Use timeout to prevent hanging
-                if not self.video_thread.wait(2000):  # 2 second timeout
-                    print("Warning: Video thread did not stop cleanly on close")
                 self.video_thread = None
-                
-            # Explicitly stop timer
-            if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
-                self.translation_timer.stop()
+            except Exception as e:
+                print(f"Error removing references: {e}")
+
+            # Force garbage collection
+            try:
+                gc.collect()
+            except Exception as e:
+                print(f"Error during garbage collection: {e}")
+
+            print("Translation module cleanup completed")
         except Exception as e:
-            print(f"Error during cleanup: {e}")
-        
-        # Call the base class implementation
-        super().closeEvent(event)
+            print(f"Error during closeEvent cleanup: {e}")
+
+        # Always accept the close event
+        event.accept()
 
     def hideEvent(self, event):
-        """Ensure resources are cleaned up when hiding the window"""
+        """Handle window hide event with proper cleanup"""
+        print("Translation module hideEvent triggered")
         try:
-            # Stop video processing to free up resources
-            if self.sign_language_thread is not None:
-                self.sign_language_thread.stop()
-                self.sign_language_thread.wait()  # Ensure thread is fully stopped
-                self.sign_language_thread = None
-                
-            if self.video_thread is not None:
-                self.video_thread.stop()
-                self.video_thread.wait()  # Ensure thread is fully stopped
-                self.video_thread = None
-                
-            # Explicitly stop timer
-            if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
-                self.translation_timer.stop()
+            # Check if we're in the middle of navigating back
+            if hasattr(self, '_navigating') and self._navigating:
+                print("Already navigating, skipping duplicate cleanup")
+                super().hideEvent(event)
+                return
+
+            # Disconnect signals to prevent callbacks during cleanup
+            try:
+                if self.sign_language_thread is not None:
+                    try:
+                        self.sign_language_thread.update_frame.disconnect()
+                        self.sign_language_thread.update_text.disconnect()
+                    except:
+                        # It's okay if signals are already disconnected
+                        pass
+            except Exception as e:
+                print(f"Error disconnecting signals during hide: {e}")
+
+            # Stop all timers
+            try:
+                if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
+                    self.translation_timer.stop()
+                if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
+                    self.word_spacing_timer.stop()
+            except Exception as e:
+                print(f"Error stopping timers during hide: {e}")
+
+            # Stop the sign language thread
+            try:
+                if self.sign_language_thread is not None:
+                    self.sign_language_thread.running = False
+                    self.sign_language_thread.stop()
+                    # Controlled wait with timeout
+                    for i in range(5):  # Try for about 0.5 seconds
+                        if not self.sign_language_thread.isRunning():
+                            break
+                        self.msleep(100)
+                    # If it's still running, we'll let it be handled by closeEvent later
+                    self.sign_language_thread = None
+            except Exception as e:
+                print(f"Error stopping sign language thread during hide: {e}")
+
+            # Stop the video thread
+            try:
+                if self.video_thread is not None:
+                    self.video_thread.running = False
+                    self.video_thread.stop()
+                    # Controlled wait with timeout
+                    for i in range(5):  # Try for about 0.5 seconds
+                        if not self.video_thread.isRunning():
+                            break
+                        self.msleep(100)
+                    # If it's still running, we'll let it be handled by closeEvent later
+                    self.video_thread = None
+            except Exception as e:
+                print(f"Error stopping video thread during hide: {e}")
+
+            # Force garbage collection
+            try:
+                gc.collect()
+            except Exception as e:
+                print(f"Error during garbage collection in hide: {e}")
+
+            print("Translation module hide cleanup completed")
         except Exception as e:
-            print(f"Error during hide cleanup: {e}")
-        
+            print(f"Error during hideEvent cleanup: {e}")
+
+        # Always call parent's hideEvent
         super().hideEvent(event)
 
     def clear_chat(self):
         """Clear all chat messages and sign language display"""
         # Clear messages list
         self.messages = []
-        
+
         # Clear chat box
         self.chat_box.clear()
-        
+
         # Clear sign language display
         self.clear_sign_display()
-        
+
         # Clear translation box
         self.translation_box.clear()
-        
-        # Reset sign sequence buffer
-        self.sign_sequence = ""
-        
-        # Reset other sign-related variables
-        self.last_recognized_sign = None
-        self.sign_buffer = ""
-        self.current_sign = None
-        
-        # Stop any active translation timer
-        if self.translation_timer.isActive():
-            self.translation_timer.stop()
 
     def show_tooltip(self, event):
         """Show the tooltip popup window when tooltip button is clicked"""
@@ -1812,21 +1997,21 @@ class TranslationModule(QMainWindow):
         """Handle camera selection from dropdown"""
         if index < 0 or index >= len(self.available_cameras):
             return
-            
+
         # Make sure we're not navigating back
         if self._navigating:
             return
-            
+
         # Set camera switching flag to prevent race conditions
         self.camera_switching = True
-        
+
         try:
             # Get the selected camera ID
             new_camera_id = self.available_cameras[index]["id"]
-            
+
             # Update the current camera ID
             self.current_camera_id = new_camera_id
-            
+
             # If video thread is running, update it with safe error handling
             if self.sign_language_thread is not None and self.sign_language_thread.isRunning():
                 try:
