@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit,
-                           QScrollArea, QSizePolicy, QFrame, QCheckBox, QDialog, QComboBox)
+                           QScrollArea, QSizePolicy, QFrame, QCheckBox, QDialog, QComboBox,
+                           QFormLayout, QDialogButtonBox, QGroupBox)
 from PyQt5.QtCore import Qt, QSize, QUrl, QThread, pyqtSignal, QByteArray, QTime, QTimer
 from PyQt5.QtGui import QPixmap, QCursor, QFont, QImage
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
@@ -11,6 +12,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import gc
+import wordninja
 
 def get_available_cameras(max_cameras=10):
     """Detect available camera devices by trying to open each index"""
@@ -670,6 +672,184 @@ class PopupWindow(QDialog):
         )
         popup.exec_()
 
+class MedicalSummaryTemplate(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Medical Summary Template")
+        self.setMinimumSize(600, 500)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: white;
+            }
+            QLabel {
+                font-size: 14px;
+                font-weight: bold;
+                color: #333;
+            }
+            QTextEdit, QLineEdit {
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 10px;
+                font-size: 14px;
+                background-color: #f9f9f9;
+            }
+            QPushButton {
+                padding: 10px 20px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QGroupBox {
+                font-size: 16px;
+                font-weight: bold;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                margin-top: 20px;
+                background-color: white;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
+
+        # Create layout
+        layout = QVBoxLayout(self)
+
+        # Header
+        header = QLabel("Medical Summary")
+        header.setStyleSheet("font-size: 24px; color: #2a70a5; margin-bottom: 15px;")
+        header.setAlignment(Qt.AlignCenter)
+        layout.addWidget(header)
+
+        # Form layout
+        form_layout = QFormLayout()
+        form_layout.setSpacing(15)
+
+        # Symptoms section
+        symptoms_group = QGroupBox("Symptoms")
+        symptoms_layout = QVBoxLayout()
+        self.symptoms_edit = QTextEdit()
+        self.symptoms_edit.setPlaceholderText("Enter patient symptoms here...")
+        self.symptoms_edit.setMinimumHeight(100)
+        symptoms_layout.addWidget(self.symptoms_edit)
+        symptoms_group.setLayout(symptoms_layout)
+        layout.addWidget(symptoms_group)
+
+        # Diagnosis section
+        diagnosis_group = QGroupBox("Diagnosis")
+        diagnosis_layout = QVBoxLayout()
+        self.diagnosis_edit = QTextEdit()
+        self.diagnosis_edit.setPlaceholderText("Enter diagnosis here...")
+        self.diagnosis_edit.setMinimumHeight(100)
+        diagnosis_layout.addWidget(self.diagnosis_edit)
+        diagnosis_group.setLayout(diagnosis_layout)
+        layout.addWidget(diagnosis_group)
+
+        # Prescription section
+        prescription_group = QGroupBox("Prescription")
+        prescription_layout = QVBoxLayout()
+        self.prescription_edit = QTextEdit()
+        self.prescription_edit.setPlaceholderText("Enter prescription details here...")
+        self.prescription_edit.setMinimumHeight(100)
+        prescription_layout.addWidget(self.prescription_edit)
+        prescription_group.setLayout(prescription_layout)
+        layout.addWidget(prescription_group)
+
+        # Button layout
+        button_layout = QHBoxLayout()
+
+        # Generate Summary button
+        self.generate_button = QPushButton("Generate Summary")
+        self.generate_button.clicked.connect(self.generate_summary)
+        button_layout.addWidget(self.generate_button)
+
+        # Cancel button
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+        """)
+        self.cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(self.cancel_button)
+
+        layout.addLayout(button_layout)
+
+        # Summary display
+        self.summary_display = QTextEdit()
+        self.summary_display.setReadOnly(True)
+        self.summary_display.setPlaceholderText("Summary will appear here...")
+        self.summary_display.hide()  # Hidden initially
+        layout.addWidget(self.summary_display)
+
+        # Add to Chat button (hidden initially)
+        self.add_to_chat_button = QPushButton("Add to Chat")
+        self.add_to_chat_button.clicked.connect(self.accept)
+        self.add_to_chat_button.hide()
+        layout.addWidget(self.add_to_chat_button)
+
+    def generate_summary(self):
+        """Generate and display a summary of the medical information"""
+        symptoms = self.symptoms_edit.toPlainText().strip()
+        diagnosis = self.diagnosis_edit.toPlainText().strip()
+        prescription = self.prescription_edit.toPlainText().strip()
+
+        # Check if any field is empty
+        if not symptoms or not diagnosis or not prescription:
+            self.summary_display.setHtml("<span style='color:red'>Please fill in all fields to generate a summary.</span>")
+            self.summary_display.show()
+            return
+
+        # Create formatted summary
+        summary = f"""
+        <div style='font-family: Arial, sans-serif; padding: 10px;'>
+            <h2 style='color: #2a70a5; text-align: center;'>Medical Summary</h2>
+            
+            <div style='margin: 15px 0; padding: 10px; background-color: #f0f7ff; border-radius: 5px;'>
+                <h3 style='color: #333;'>Symptoms:</h3>
+                <p style='margin-left: 15px;'>{symptoms}</p>
+            </div>
+            
+            <div style='margin: 15px 0; padding: 10px; background-color: #f0fff0; border-radius: 5px;'>
+                <h3 style='color: #333;'>Diagnosis:</h3>
+                <p style='margin-left: 15px;'>{diagnosis}</p>
+            </div>
+            
+            <div style='margin: 15px 0; padding: 10px; background-color: #fff7f0; border-radius: 5px;'>
+                <h3 style='color: #333;'>Prescription:</h3>
+                <p style='margin-left: 15px;'>{prescription}</p>
+            </div>
+        </div>
+        """
+
+        # Display the summary
+        self.summary_display.setHtml(summary)
+        self.summary_display.show()
+
+        # Show Add to Chat button
+        self.add_to_chat_button.show()
+
+        # Store plain text summary for returning
+        self.plain_summary = f"""Medical Summary
+        
+Symptoms:
+{symptoms}
+Diagnosis:
+{diagnosis}
+Prescription:
+{prescription}"""
+
 class TranslationModule(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -714,10 +894,11 @@ class TranslationModule(QMainWindow):
         self.last_recognized_sign = None
         self.sign_buffer = ""
         self.last_sign_time = 0
-        self.sign_interval = 1500  # 2 seconds interval between signs
+        self.sign_interval = 1500  # 1.5 seconds interval between signs
         self.current_sign = None
         self.sign_start_time = 0
-        self.sign_hold_time = 700  # 1 second to hold a sign before sending
+        self.sign_hold_time = 700  # 0.7 seconds to hold a sign before sending
+        self.accumulated_chars = ""  # Buffer to accumulate characters for wordninja
 
         # Setup video stream (will be properly initialized when the UI is shown)
         self.video_thread = None
@@ -726,12 +907,6 @@ class TranslationModule(QMainWindow):
         self.translation_timer = QTimer()
         self.translation_timer.setSingleShot(True)
         self.translation_timer.timeout.connect(self.move_translation_to_chat)
-        self.last_gesture_time = 0
-
-        # Initialize word spacing timer
-        self.word_spacing_timer = QTimer()
-        self.word_spacing_timer.setSingleShot(True)
-        self.word_spacing_timer.timeout.connect(self.add_space)
         self.last_gesture_time = 0
 
         # Flag to track navigation state
@@ -1095,6 +1270,26 @@ class TranslationModule(QMainWindow):
             }
         """)
 
+        # Add medical summary template button
+        self.medical_summary_button = QPushButton("Medical Summary")
+        self.medical_summary_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.medical_summary_button.clicked.connect(self.show_medical_summary_template)
+        self.medical_summary_button.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                font-weight: bold;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #0b7dda;
+            }
+        """)
+
         # Add clear chat button
         self.clear_chat_button = QPushButton("Clear Chat")
         self.clear_chat_button.setCursor(QCursor(Qt.PointingHandCursor))
@@ -1118,6 +1313,7 @@ class TranslationModule(QMainWindow):
         self.input_container2.addWidget(self.input_user2)
         self.input_container2.addWidget(self.send_button2)
         self.input_container2.addWidget(self.display_mode_toggle)
+        self.input_container2.addWidget(self.medical_summary_button)
         self.input_container2.addWidget(self.clear_chat_button)
         self.box2_layout.addLayout(self.input_container2)
 
@@ -1603,8 +1799,6 @@ class TranslationModule(QMainWindow):
             try:
                 if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
                     self.translation_timer.stop()
-                if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
-                    self.word_spacing_timer.stop()
             except Exception as e:
                 print(f"Error stopping timers: {e}")
 
@@ -1725,12 +1919,11 @@ class TranslationModule(QMainWindow):
         self.sign_language_thread.start()
 
     def handle_recognized_sign(self, sign):
-        """Handle recognized sign language gestures with timing control"""
+        """Handle recognized sign language gestures with timing control and word segmentation"""
         current_time = QTime.currentTime().msecsSinceStartOfDay()
 
-        # Update last gesture time and restart word spacing timer
+        # Update last gesture time
         self.last_gesture_time = current_time
-        self.word_spacing_timer.start(2000)  # 2 seconds for word spacing
 
         # If this is a new sign, start tracking it
         if sign != self.current_sign:
@@ -1744,25 +1937,93 @@ class TranslationModule(QMainWindow):
             if current_time - self.sign_start_time >= self.sign_hold_time:
                 # Check if enough time has passed since the last sent sign
                 if current_time - self.last_sign_time >= self.sign_interval:
-                    # Get current text and append new sign
-                    current_text = self.translation_box.text()
-                    if current_text:
-                        new_text = f"{current_text}{sign}"
-                    else:
-                        new_text = sign
-                    self.translation_box.setText(new_text)
+                    # Check if the sign is a letter (A-Z)
+                    is_letter = sign in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                    
+                    # Update the accumulated characters, preserving case
+                    self.accumulated_chars += sign
+                    
+                    # Apply word segmentation to the accumulated characters
+                    segmented_text = self.apply_word_segmentation(self.accumulated_chars)
+                    
+                    # Update the translation box with the segmented text
+                    self.translation_box.setText(segmented_text)
+                    
+                    # Update timing variables
                     self.last_sign_time = current_time
                     self.last_recognized_sign = sign
-                    self.sign_buffer = sign
 
                     # Restart the translation timer
-                    self.translation_timer.start(5000)  # 5 seconds
+                    self.translation_timer.start(5000)  # 5 seconds before moving to chat
 
-    def add_space(self):
-        """Add a space to the translation text"""
-        current_text = self.translation_box.text()
-        if current_text and not current_text.endswith(' '):
-            self.translation_box.setText(f"{current_text} ")
+    def apply_word_segmentation(self, text):
+        """Apply word segmentation with intelligent capitalization handling"""
+        if not text:
+            return ""
+            
+        # Preserve existing capitalization patterns before segmentation
+        is_all_caps = text.isupper() and len(text) > 1
+        is_first_cap = text[0].isupper()
+        
+        # Track potential acronyms (consecutive uppercase letters)
+        acronyms = []
+        current_acronym = ""
+        
+        for char in text:
+            if char.isupper() and char.isalpha():
+                current_acronym += char
+            elif current_acronym:
+                if len(current_acronym) > 1:  # Consider it an acronym if more than one uppercase letter
+                    acronyms.append(current_acronym)
+                current_acronym = ""
+                
+        # Add the last acronym if there is one
+        if current_acronym and len(current_acronym) > 1:
+            acronyms.append(current_acronym)
+            
+        # Split the text into words using wordninja
+        segmented_words = wordninja.split(text.lower())
+        
+        # Apply capitalization rules
+        result = []
+        sentence_start = True
+        
+        for word in segmented_words:
+            # Check if this word matches any of our acronyms
+            is_acronym = False
+            for acronym in acronyms:
+                if word.lower() == acronym.lower():
+                    result.append(acronym)
+                    is_acronym = True
+                    break
+            
+            if is_acronym:
+                sentence_start = False
+                continue
+                
+            # Apply sentence-start capitalization
+            if sentence_start:
+                word = word.capitalize()
+                sentence_start = False
+            
+            # Add the word to the result
+            result.append(word)
+            
+            # Check if this might be the end of a sentence
+            if word.endswith(('.', '!', '?')):
+                sentence_start = True
+        
+        # For single-letter words that might be 'I', capitalize them
+        for i in range(len(result)):
+            if result[i] == 'i':
+                result[i] = 'I'
+                
+        # If the original text was all caps, convert back
+        if is_all_caps:
+            result = [word.upper() for word in result]
+        
+        # Join the words with spaces
+        return ' '.join(result)
 
     def move_translation_to_chat(self):
         """Move the translation text to the chat box and clear the translation box"""
@@ -1770,8 +2031,9 @@ class TranslationModule(QMainWindow):
         if translation_text:
             # Add the translation as a message from the Patient
             self.send_message("Patient", translation_text)
-            # Clear the translation box
+            # Clear the translation box and accumulated characters
             self.translation_box.clear()
+            self.accumulated_chars = ""
             # Clear the sign language display
             self.clear_sign_display()
 
@@ -1814,8 +2076,6 @@ class TranslationModule(QMainWindow):
             try:
                 if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
                     self.translation_timer.stop()
-                if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
-                    self.word_spacing_timer.stop()
             except Exception as e:
                 print(f"Error stopping timers: {e}")
 
@@ -1921,8 +2181,6 @@ class TranslationModule(QMainWindow):
             try:
                 if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
                     self.translation_timer.stop()
-                if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
-                    self.word_spacing_timer.stop()
             except Exception as e:
                 print(f"Error stopping timers during hide: {e}")
 
@@ -1980,8 +2238,9 @@ class TranslationModule(QMainWindow):
         # Clear sign language display
         self.clear_sign_display()
 
-        # Clear translation box
+        # Clear translation box and accumulated characters
         self.translation_box.clear()
+        self.accumulated_chars = ""
 
     def show_tooltip(self, event):
         """Show the tooltip popup window when tooltip button is clicked"""
@@ -2030,6 +2289,14 @@ class TranslationModule(QMainWindow):
         finally:
             # Clear camera switching flag
             self.camera_switching = False
+
+    def show_medical_summary_template(self):
+        """Show the medical summary template dialog"""
+        dialog = MedicalSummaryTemplate(self)
+        if dialog.exec_() == QDialog.Accepted:
+            # If dialog is accepted, add the summary to chat
+            if hasattr(dialog, 'plain_summary'):
+                self.send_message("Doctor", dialog.plain_summary)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
