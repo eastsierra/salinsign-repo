@@ -10,6 +10,7 @@ import pickle
 import cv2
 import mediapipe as mp
 import numpy as np
+import wordninja  # Import wordninja for word segmentation
 
 def get_available_cameras(max_cameras=10):
     """Detect available camera devices by trying to open each index"""
@@ -674,10 +675,10 @@ class TranslationModule(QMainWindow):
         self.last_recognized_sign = None
         self.sign_buffer = ""
         self.last_sign_time = 0
-        self.sign_interval = 1500  # 2 seconds interval between signs
+        self.sign_interval = 1500  # 1.5 seconds interval between signs
         self.current_sign = None
         self.sign_start_time = 0
-        self.sign_hold_time = 700  # 1 second to hold a sign before sending
+        self.sign_hold_time = 700  # 0.7 seconds to hold a sign before sending
         
         # Setup video stream (will be properly initialized when the UI is shown)
         self.video_thread = None
@@ -688,11 +689,8 @@ class TranslationModule(QMainWindow):
         self.translation_timer.timeout.connect(self.move_translation_to_chat)
         self.last_gesture_time = 0
         
-        # Initialize word spacing timer
-        self.word_spacing_timer = QTimer()
-        self.word_spacing_timer.setSingleShot(True)
-        self.word_spacing_timer.timeout.connect(self.add_space)
-        self.last_gesture_time = 0
+        # Buffer of signs for word segmentation
+        self.sign_sequence = ""
         
         # Flag to track navigation state
         self._navigating = False
@@ -1493,19 +1491,13 @@ class TranslationModule(QMainWindow):
                 except Exception as e:
                     print(f"Error stopping video thread: {e}")
             
-            # Explicitly stop timers
-            print("Stopping timers...")
+            # Explicitly stop timer
+            print("Stopping timer...")
             if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
                 try:
                     self.translation_timer.stop()
                 except Exception as e:
                     print(f"Error stopping translation timer: {e}")
-                
-            if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
-                try:
-                    self.word_spacing_timer.stop()
-                except Exception as e:
-                    print(f"Error stopping word spacing timer: {e}")
 
             # Delay the actual navigation to give threads time to clean up
             def perform_navigation():
@@ -1575,9 +1567,8 @@ class TranslationModule(QMainWindow):
         """Handle recognized sign language gestures with timing control"""
         current_time = QTime.currentTime().msecsSinceStartOfDay()
         
-        # Update last gesture time and restart word spacing timer
+        # Update last gesture time
         self.last_gesture_time = current_time
-        self.word_spacing_timer.start(2000)  # 2 seconds for word spacing
         
         # If this is a new sign, start tracking it
         if sign != self.current_sign:
@@ -1591,13 +1582,27 @@ class TranslationModule(QMainWindow):
             if current_time - self.sign_start_time >= self.sign_hold_time:
                 # Check if enough time has passed since the last sent sign
                 if current_time - self.last_sign_time >= self.sign_interval:
-                    # Get current text and append new sign
-                    current_text = self.translation_box.text()
-                    if current_text:
-                        new_text = f"{current_text}{sign}"
+                    # Special medical terms and phrases that should be treated as whole words
+                    special_terms = ["Pain", "Sick", "Headache", "Dizzy", "Vomit", "Diarrhea", "Cough", "Allergy",
+                                  "Strong", "Weak", "Stomachache", "Sore Throat", "Injury", 
+                                  "Breathing Difficulty", "Food Poisoning", "Wound", "Stress",
+                                  "Conditions", "Fever", "Diabetes", "Back Pain", "Cold", "Stroke",
+                                  "Blood Pressure", "Heartache", "Hello", "Good Morning", "Good Afternooon",
+                                  "Good Evening", "Thank You", "Good Bye"]
+                    
+                    # Add the sign to our sequence, with special handling for medical terms
+                    if sign in special_terms and self.sign_sequence and self.sign_sequence[-1:] != ' ':
+                        # Add a space before a special term if not already present
+                        self.sign_sequence += " " + sign
                     else:
-                        new_text = sign
-                    self.translation_box.setText(new_text)
+                        self.sign_sequence += sign
+                    
+                    # Segment the accumulated signs into words
+                    segmented_text = self.segment_words(self.sign_sequence)
+                    
+                    # Update the translation box with segmented text
+                    self.translation_box.setText(segmented_text)
+                    
                     self.last_sign_time = current_time
                     self.last_recognized_sign = sign
                     self.sign_buffer = sign
@@ -1605,11 +1610,83 @@ class TranslationModule(QMainWindow):
                     # Restart the translation timer
                     self.translation_timer.start(5000)  # 5 seconds
 
-    def add_space(self):
-        """Add a space to the translation text"""
-        current_text = self.translation_box.text()
-        if current_text and not current_text.endswith(' '):
-            self.translation_box.setText(f"{current_text} ")
+    def segment_words(self, text):
+        """Segment a sequence of characters into words using wordninja"""
+        # Special medical terms and phrases that should be treated as whole words
+        special_terms = ["Pain", "Sick", "Headache", "Dizzy", "Vomit", "Diarrhea", "Cough", "Allergy",
+                       "Strong", "Weak", "Stomachache", "Sore Throat", "Injury", 
+                       "Breathing Difficulty", "Food Poisoning", "Wound", "Stress",
+                       "Conditions", "Fever", "Diabetes", "Back Pain", "Colds", "Stroke",
+                       "Blood Pressure", "Heartache", "Hello", "Good Morning", "Good Afternooon",
+                       "Good Evening", "Thank You", "Good Bye"]
+        
+        # Process the text to find and separate special terms
+        result = []
+        remaining_text = text
+        
+        # Flag to track if any special term was found
+        found_special_term = False
+        
+        # Check for each special term in the text
+        for term in special_terms:
+            if term in remaining_text:
+                # Split the text where the term appears
+                parts = remaining_text.split(term)
+                
+                # Process each part before and after the term
+                for i, part in enumerate(parts):
+                    # Skip empty parts
+                    if not part:
+                        continue
+                        
+                    # Add the non-empty part for further processing
+                    if part.strip():
+                        result.append(part)
+                    
+                    # Add the term after each part except the last one
+                    if i < len(parts) - 1:
+                        result.append(term)
+                
+                found_special_term = True
+                break  # Process one term at a time for simplicity
+        
+        # If no special terms were found, just use wordninja on the whole text
+        if not found_special_term:
+            try:
+                # Extract just alphabetic characters for segmentation
+                alpha_only = ''.join(c for c in text if c.isalpha())
+                
+                if not alpha_only:
+                    return text
+                    
+                # Segment the text using wordninja
+                segmented = wordninja.split(alpha_only)
+                
+                # Join with spaces
+                return " ".join(segmented)
+            except Exception as e:
+                print(f"Error in word segmentation: {e}")
+                return text  # Return original text if segmentation fails
+        
+        # Process each remaining part with wordninja if it's not a special term
+        final_result = []
+        for part in result:
+            # Skip processing if this part is a special term
+            if part in special_terms:
+                final_result.append(part)
+            else:
+                try:
+                    # Use wordninja for this part
+                    alpha_only = ''.join(c for c in part if c.isalpha())
+                    if alpha_only:
+                        segmented = wordninja.split(alpha_only)
+                        final_result.extend(segmented)
+                except Exception as e:
+                    print(f"Error segmenting part '{part}': {e}")
+                    final_result.append(part)
+        
+        # Join all parts with spaces
+        return " ".join(final_result)
     
     def move_translation_to_chat(self):
         """Move the translation text to the chat box and clear the translation box"""
@@ -1619,6 +1696,8 @@ class TranslationModule(QMainWindow):
             self.send_message("Patient", translation_text)
             # Clear the translation box
             self.translation_box.clear()
+            # Reset the sign sequence
+            self.sign_sequence = ""
             # Clear the sign language display
             self.clear_sign_display()
     
@@ -1662,12 +1741,9 @@ class TranslationModule(QMainWindow):
                     print("Warning: Video thread did not stop cleanly on close")
                 self.video_thread = None
                 
-            # Explicitly stop timers
+            # Explicitly stop timer
             if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
                 self.translation_timer.stop()
-                
-            if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
-                self.word_spacing_timer.stop()
         except Exception as e:
             print(f"Error during cleanup: {e}")
         
@@ -1688,12 +1764,9 @@ class TranslationModule(QMainWindow):
                 self.video_thread.wait()  # Ensure thread is fully stopped
                 self.video_thread = None
                 
-            # Explicitly stop timers
+            # Explicitly stop timer
             if hasattr(self, 'translation_timer') and self.translation_timer.isActive():
                 self.translation_timer.stop()
-                
-            if hasattr(self, 'word_spacing_timer') and self.word_spacing_timer.isActive():
-                self.word_spacing_timer.stop()
         except Exception as e:
             print(f"Error during hide cleanup: {e}")
         
@@ -1712,6 +1785,18 @@ class TranslationModule(QMainWindow):
         
         # Clear translation box
         self.translation_box.clear()
+        
+        # Reset sign sequence buffer
+        self.sign_sequence = ""
+        
+        # Reset other sign-related variables
+        self.last_recognized_sign = None
+        self.sign_buffer = ""
+        self.current_sign = None
+        
+        # Stop any active translation timer
+        if self.translation_timer.isActive():
+            self.translation_timer.stop()
 
     def show_tooltip(self, event):
         """Show the tooltip popup window when tooltip button is clicked"""
