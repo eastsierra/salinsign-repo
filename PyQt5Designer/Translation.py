@@ -895,6 +895,9 @@ class TranslationModule(QMainWindow):
 
         # Initialize display mode (True for text, False for sign language)
         self.text_mode = True
+        
+        # Initialize edit mode (True for manual sending, False for automatic)
+        self.edit_mode = False
 
         # Default camera ID
         self.current_camera_id = 0
@@ -1066,10 +1069,53 @@ class TranslationModule(QMainWindow):
         self.video_placeholder.setAlignment(Qt.AlignCenter)
         self.video_placeholder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.box1_layout.addWidget(self.video_placeholder)
+        
+        # Edit Mode Toggle
+        edit_mode_layout = QHBoxLayout()
+        edit_mode_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.edit_mode_toggle = QCheckBox("Edit Mode")
+        self.edit_mode_toggle.setChecked(False)
+        self.edit_mode_toggle.setCursor(QCursor(Qt.PointingHandCursor))
+        self.edit_mode_toggle.stateChanged.connect(self.toggle_edit_mode)
+        self.edit_mode_toggle.setStyleSheet("""
+            QCheckBox {
+                font-size: 14px;
+                font-weight: bold;
+                color: #333;
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+            }
+            QCheckBox::indicator:unchecked {
+                background-color: #f0f0f0;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 2px solid #45a049;
+                border-radius: 3px;
+            }
+        """)
+        
+        edit_mode_label = QLabel("(Enable to edit translations before sending)")
+        edit_mode_label.setStyleSheet("font-size: 12px; color: #666;")
+        
+        edit_mode_layout.addWidget(self.edit_mode_toggle)
+        edit_mode_layout.addWidget(edit_mode_label)
+        edit_mode_layout.addStretch()
+        
+        self.box1_layout.addLayout(edit_mode_layout)
 
+        # Translation Box Container
+        self.translation_container = QHBoxLayout()
+        
         # Translation Text Box
         self.translation_box = QLineEdit()
-        self.translation_box.setReadOnly(True)
+        self.translation_box.setReadOnly(True)  # Initially read-only
         self.translation_box.setObjectName("translationBox")
         self.translation_box.setPlaceholderText("Translations will appear here...")
         self.translation_box.setStyleSheet("""
@@ -1082,7 +1128,31 @@ class TranslationModule(QMainWindow):
                 min-height: 40px;
             }
         """)
-        self.box1_layout.addWidget(self.translation_box)
+        self.translation_container.addWidget(self.translation_box)
+        
+        # Send Button for Edit Mode (initially hidden)
+        self.translation_send_button = QPushButton("Send")
+        self.translation_send_button.setCursor(QCursor(Qt.PointingHandCursor))
+        self.translation_send_button.clicked.connect(self.send_translation)
+        self.translation_send_button.setStyleSheet("""
+            QPushButton {
+                padding: 10px 15px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                font-weight: bold;
+                min-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        self.translation_send_button.hide()  # Initially hidden
+        self.translation_container.addWidget(self.translation_send_button)
+        
+        self.box1_layout.addLayout(self.translation_container)
 
         # Add Box 1 to container
         self.container.addWidget(self.box1)
@@ -1349,7 +1419,56 @@ class TranslationModule(QMainWindow):
 
         # Add container to main layout
         self.main_layout.addLayout(self.container)
-
+        
+    def toggle_edit_mode(self, state):
+        """Toggle between automatic and manual translation sending modes"""
+        self.edit_mode = bool(state)
+        
+        if self.edit_mode:
+            # Edit mode enabled - make translation box editable and show send button
+            self.translation_box.setReadOnly(False)
+            self.translation_box.setStyleSheet("""
+                QLineEdit {
+                    background-color: white;
+                    border: 1px solid #4CAF50;
+                    border-radius: 5px;
+                    padding: 10px;
+                    font-size: 14px;
+                    min-height: 40px;
+                }
+            """)
+            self.translation_send_button.show()
+            
+            # Stop automatic timer if it's running
+            if self.translation_timer.isActive():
+                self.translation_timer.stop()
+        else:
+            # Edit mode disabled - make translation box read-only and hide send button
+            self.translation_box.setReadOnly(True)
+            self.translation_box.setStyleSheet("""
+                QLineEdit {
+                    background-color: white;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 10px;
+                    font-size: 14px;
+                    min-height: 40px;
+                }
+            """)
+            self.translation_send_button.hide()
+    
+    def send_translation(self):
+        """Send the current translation to the chat"""
+        translation_text = self.translation_box.text()
+        if translation_text:
+            # Add the translation as a message from the Patient
+            self.send_message("Patient", translation_text)
+            # Clear the translation box and accumulated characters
+            self.translation_box.clear()
+            self.accumulated_chars = ""
+            # Clear the sign language display
+            self.clear_sign_display()
+        
     def handle_resize(self, event):
         width = event.size().width()
         height = event.size().height()
@@ -2012,10 +2131,7 @@ class TranslationModule(QMainWindow):
             if current_time - self.sign_start_time >= self.sign_hold_time:
                 # Check if enough time has passed since the last sent sign
                 if current_time - self.last_sign_time >= self.sign_interval:
-                    # Check if the sign is a letter (A-Z)
-                    is_letter = sign in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                    
-                    # Update the accumulated characters, preserving case
+                    # Update the accumulated characters
                     self.accumulated_chars += sign
                     
                     # Apply word segmentation to the accumulated characters
@@ -2028,8 +2144,9 @@ class TranslationModule(QMainWindow):
                     self.last_sign_time = current_time
                     self.last_recognized_sign = sign
 
-                    # Restart the translation timer
-                    self.translation_timer.start(5000)  # 5 seconds before moving to chat
+                    # Only start the translation timer if not in edit mode
+                    if not self.edit_mode:
+                        self.translation_timer.start(5000)  # 5 seconds before moving to chat
 
     def apply_word_segmentation(self, text):
         """Apply word segmentation with intelligent capitalization handling"""
@@ -2101,16 +2218,19 @@ class TranslationModule(QMainWindow):
         return ' '.join(result)
 
     def move_translation_to_chat(self):
-        """Move the translation text to the chat box and clear the translation box"""
-        translation_text = self.translation_box.text()
-        if translation_text:
-            # Add the translation as a message from the Patient
-            self.send_message("Patient", translation_text)
-            # Clear the translation box and accumulated characters
-            self.translation_box.clear()
-            self.accumulated_chars = ""
-            # Clear the sign language display
-            self.clear_sign_display()
+        """Move the translation text to the chat box and clear the translation box
+        This is called automatically when not in edit mode"""
+        # Only proceed if not in edit mode
+        if not self.edit_mode:
+            translation_text = self.translation_box.text()
+            if translation_text:
+                # Add the translation as a message from the Patient
+                self.send_message("Patient", translation_text)
+                # Clear the translation box and accumulated characters
+                self.translation_box.clear()
+                self.accumulated_chars = ""
+                # Clear the sign language display
+                self.clear_sign_display()
 
     def showEvent(self, event):
         """Start video streaming when the window is shown"""
