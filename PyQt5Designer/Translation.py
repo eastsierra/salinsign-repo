@@ -130,6 +130,10 @@ class SignLanguageThread(QThread):
         self.camera_id = camera_id
         self.running = True
         self.cap = None
+        self.confidence_threshold = 0.4  # Lower threshold for testing
+        self.last_prediction = None
+        self.prediction_count = 0
+        self.stable_predictions_required = 3  # Number of consistent predictions required
 
         # Load model in try-except block to catch any exceptions
         try:
@@ -175,12 +179,13 @@ class SignLanguageThread(QThread):
 
                     if results.multi_hand_landmarks:
                         for hand_landmarks in results.multi_hand_landmarks:
-                            mp_drawing.draw_landmarks(
-                                frame,
-                                hand_landmarks,
-                                mp_hands.HAND_CONNECTIONS,
-                                mp_drawing_styles.get_default_hand_landmarks_style(),
-                                mp_drawing_styles.get_default_hand_connections_style())
+                            # Remove or comment out this section to make landmarks invisible
+                            # mp_drawing.draw_landmarks(
+                            #     frame,
+                            #     hand_landmarks,
+                            #     mp_hands.HAND_CONNECTIONS,
+                            #     mp_drawing_styles.get_default_hand_landmarks_style(),
+                            #     mp_drawing_styles.get_default_hand_connections_style())
 
                             data_aux = []
                             x_ = []
@@ -253,14 +258,36 @@ class SignLanguageThread(QThread):
                             y2 = int(max(y_) * H) - 10
 
                             try:
-                                prediction = self.model.predict([np.asarray(data_aux)])
-                                predicted_character = self.labels_dict[int(prediction[0])]
-
+                                # Simple approach: get the prediction
+                                input_data = np.asarray(data_aux).reshape(1, -1)  # Reshape for single sample
+                                
+                                # Basic prediction - this should work with most models
+                                prediction = self.model.predict(input_data)[0]
+                                
+                                # Check if prediction is the same as last time
+                                current_prediction = int(prediction)
+                                
+                                if current_prediction == self.last_prediction:
+                                    self.prediction_count += 1
+                                else:
+                                    self.prediction_count = 1
+                                    self.last_prediction = current_prediction
+                                
+                                # Only show a confident prediction if we've seen it consistently
+                                if self.prediction_count >= self.stable_predictions_required:
+                                    predicted_character = self.labels_dict[current_prediction]
+                                else:
+                                    predicted_character = "Sign language not recognized"
+                                
+                                # Draw rectangle around hand
                                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 4)
+                                
+                                # Show prediction text above hand
                                 cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3, cv2.LINE_AA)
 
-                                # Emit the predicted character
-                                self.update_text.emit(predicted_character)
+                                # Emit the predicted character only if it's a recognized gesture
+                                if predicted_character != "Sign language not recognized":
+                                    self.update_text.emit(predicted_character)
                             except Exception as e:
                                 print(f"Error during prediction: {e}")
 
@@ -1672,73 +1699,119 @@ class TranslationModule(QMainWindow):
                     clear: both;
                     overflow: hidden;
                     margin-bottom: 8px;
+                    display: flex;
+                    flex-direction: column;
                 }
                 .message-container-left {
-                    float: left;
-                    width: 70%;
+                    align-self: flex-start;
+                    max-width: 70%;
                     margin-left: 10px;
+                    display: flex;
+                    align-items: center;
+                    gap: 2px;
                 }
                 .message-container-right {
-                    float: right;
-                    width: 70%;
+                    align-self: flex-end;
+                    max-width: 70%;
                     margin-right: 10px;
+                    display: flex;
+                    align-items: center;
+                    gap: 2px;
+                    flex-direction: column;
+                    align-items: flex-end;
                 }
                 .message-bubble {
                     border-radius: 20px;
-                    padding: 10px 15px;
+                    padding: 10px 15px; /* Ensured padding */
                     display: inline-block;
-                    max-width: 100%;
                     word-wrap: break-word;
-                    font-size: 28px;  /* Increased from 14px */
+                    font-size: 18px;
                     line-height: 1.4;
                     position: relative;
+                    min-width: min-content;
+                    max-width: 100%;
+                    box-sizing: border-box;
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
                 }
                 .patient-bubble {
-                    background-color: white;
-                    border: 1px solid #e0e0e0;
-                    color: #333;
-                    border-bottom-left-radius: 5px;
-                    margin-left: 5px;
+                    background-color: #00c29d;
+                    color: white;
+                    border-radius: 20px; /* Explicitly set border-radius */
+                    margin-left: 40px;
+                    margin-right: 100px;
                 }
                 .doctor-bubble {
-                    background-color: white;
-                    border: 1px solid #e0e0e0;
-                    color: #333;
-                    border-bottom-right-radius: 5px;
-                    margin-right: 5px;
+                    background-color: #0084ff;
+                    color: white;
+                    border-radius: 20px; /* Explicitly set border-radius */
+                    margin-right: 40px;
+                    margin-left: 100px;
+                }
+                .message-text {
+                    white-space: pre-wrap;
+                    display: inline-block;
+                    width: auto;
+                    min-width: min-content;
+                    padding: 4px 0;
                 }
                 .message-sender {
                     font-weight: bold;
                     margin-bottom: 2px;
-                    font-size: 16px;  /* Increased from 14px */
+                    font-size: 16px;
                     padding-left: 8px;
                     padding-right: 8px;
-                    text-align: left;
                 }
                 .patient-sender {
                     color: #0066cc;
+                    text-align: left;
                 }
                 .doctor-sender {
                     color: #009933;
+                    text-align: right;
                 }
-                .message-text {
-                    white-space: pre-wrap;
+                .user-icon-patient {
+                    width: 15px;
+                    height: 15px;
+                    padding-top: 50px;
+                    border-radius: 50%;
+                    object-fit: cover;
+                    margin-bottom: 4px;
+                    float: left;
                 }
-                .clear {
-                    clear: both;
+                .user-icon-doctor {
+                    width: 15px;
+                    height: 15px;
+                    margin-top: 250px;
+                    border-radius: 50%;
+                    object-fit: cover;
+                    margin-bottom: 4px;
+                    float: right;
+                }
+                .message-time {
+                    font-size: 11px;
+                    color: rgba(255, 255, 255, 0.8);
+                    margin-top: 4px;
+                    display: block;
+                    text-align: right;
                 }
             </style>
         </head>
         <body>
         """
 
-        current_user = None
-        for msg in self.messages:
-            # Add sender label only when the user changes
-            show_sender = (current_user != msg['user'])
-            current_user = msg['user']
+        # Get the current time for message timestamps
+        current_time = QTime.currentTime().toString("hh:mm")
 
-            if msg['user'] == "Patient":
+        for idx, msg in enumerate(self.messages):
+            # Add spacing between different senders
+            if idx > 0 and self.messages[idx-1]["user"] != msg["user"]:
+                html_content += '<div style="height: 10px;"></div>'
+            
+            # Determine if we should show the sender label
+            # Only show it for the first message from each sender in a sequence
+            show_sender = (idx == 0) or (self.messages[idx-1]["user"] != msg["user"])
+                
+            if msg["user"] == "Patient":
                 # Patient message - left aligned
                 if show_sender:
                     html_content += f'<div class="message-sender patient-sender">{msg["user"]}</div>'
@@ -1746,11 +1819,12 @@ class TranslationModule(QMainWindow):
                 html_content += f"""
                 <div class="message-row">
                     <div class="message-container-left">
+                        <img src="images/PatientIcon.png" class="user-icon-patient" alt="Patient">
                         <div class="message-bubble patient-bubble">
                             <div class="message-text">{msg["text"]}</div>
+                            <span class="message-time">{current_time}</span>
                         </div>
                     </div>
-                    <div class="clear"></div>
                 </div>
                 """
             else:
@@ -1761,11 +1835,12 @@ class TranslationModule(QMainWindow):
                 html_content += f"""
                 <div class="message-row">
                     <div class="message-container-right">
+                        <img src="images/DoctorIcon.png" class="user-icon-doctor" alt="Doctor">
                         <div class="message-bubble doctor-bubble">
                             <div class="message-text">{msg["text"]}</div>
+                            <span class="message-time">{current_time}</span>    
                         </div>
                     </div>
-                    <div class="clear"></div>
                 </div>
                 """
 
