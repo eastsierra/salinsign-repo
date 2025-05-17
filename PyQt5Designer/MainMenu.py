@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
 import os
@@ -17,22 +16,30 @@ class Ui_MainWindow(object):
             MainWindow.setTabShape(QtWidgets.QTabWidget.Rounded)
             # Set window to fullscreen
             MainWindow.showFullScreen()
-            
+
             # Save reference to MainWindow for later use
             self.window = MainWindow
-            
+
             # Initialize module windows to None
             self.translation_window = None
             self.dictionary_window = None
             self.user_guide_window = None
-            
+
             # Preload Translation module in background with safety checks
             QtCore.QTimer.singleShot(500, self.preload_translation_module)
-            
+
             self.centralwidget = QtWidgets.QWidget(MainWindow)
             self.centralwidget.setStyleSheet("background-color: rgb(255, 255, 255);")
             self.centralwidget.setObjectName("centralwidget")
-            
+
+            # Add background image label
+            self.background_label = QtWidgets.QLabel(self.centralwidget)
+            self.background_label.setGeometry(QtCore.QRect(0, 0, 1920, 1080)) # Initial size
+            self.background_label.setPixmap(QtGui.QPixmap("images/RevampedMainDesign.png"))
+            self.background_label.setScaledContents(True)
+            self.background_label.setObjectName("background_label")
+            self.background_label.lower() # Ensure it's behind other widgets
+
             # Create buttons with original styling
             self.SignLibraryButton = QtWidgets.QPushButton(self.centralwidget)
             self.SignLibraryButton.setGeometry(QtCore.QRect(824, 620, 271, 51))
@@ -56,7 +63,7 @@ class Ui_MainWindow(object):
             self.SignLibraryButton.setIcon(icon)
             self.SignLibraryButton.setIconSize(QtCore.QSize(200, 130))
             self.SignLibraryButton.setObjectName("SignLibraryButton")
-            
+
             self.TranslationButton = QtWidgets.QPushButton(self.centralwidget)
             self.TranslationButton.setGeometry(QtCore.QRect(824, 550, 271, 51))
             font = QtGui.QFont()
@@ -81,7 +88,7 @@ class Ui_MainWindow(object):
             self.TranslationButton.setIcon(icon2)
             self.TranslationButton.setIconSize(QtCore.QSize(200, 130))
             self.TranslationButton.setObjectName("TranslationButton")
-            
+
             # Add User Guide Button - adjust Y position to be after Sign Library button
             self.UserGuideButton = QtWidgets.QPushButton(self.centralwidget)
             self.UserGuideButton.setGeometry(QtCore.QRect(824, 690, 271, 51))  # Updated Y position
@@ -105,49 +112,16 @@ class Ui_MainWindow(object):
             self.UserGuideButton.setIcon(icon3)
             self.UserGuideButton.setIconSize(QtCore.QSize(200, 130))
             self.UserGuideButton.setObjectName("UserGuideButton")
-            
-            # Create labels with proper scaling settings
-            self.label_2 = QtWidgets.QLabel(self.centralwidget)
-            self.label_2.setGeometry(QtCore.QRect(-80, 540, 791, 511))
-            self.label_2.setText("")
-            self.label_2.setPixmap(QtGui.QPixmap("images/doctorBottomLeft.png"))
-            self.label_2.setScaledContents(True)
-            self.label_2.setObjectName("label_2")
-            
-            self.label = QtWidgets.QLabel(self.centralwidget)
-            self.label.setGeometry(QtCore.QRect(474, 50, 971, 481))
-            self.label.setText("")
-            self.label.setPixmap(QtGui.QPixmap("images/SalinSignLogo.png"))
-            self.label.setScaledContents(True)
-            self.label.setObjectName("label")
-            
-            self.label_3 = QtWidgets.QLabel(self.centralwidget)
-            self.label_3.setGeometry(QtCore.QRect(1170, 550, 791, 511))
-            self.label_3.setText("")
-            self.label_3.setPixmap(QtGui.QPixmap("images/deafBottomRight.png"))
-            self.label_3.setScaledContents(True)
-            self.label_3.setObjectName("label_3")
-            
-            self.label_4 = QtWidgets.QLabel(self.centralwidget)
-            self.label_4.setGeometry(QtCore.QRect(170, 30, 271, 271))
-            self.label_4.setText("")
-            self.label_4.setPixmap(QtGui.QPixmap("images/CrossUpperLeft.png"))
-            self.label_4.setScaledContents(True)
-            self.label_4.setObjectName("label_4")
-            
+
             MainWindow.setCentralWidget(self.centralwidget)
-            self.menubar = QtWidgets.QMenuBar(MainWindow)
-            self.menubar.setGeometry(QtCore.QRect(0, 0, 1920, 21))
-            self.menubar.setObjectName("menubar")
-            MainWindow.setMenuBar(self.menubar)
             
-            self.statusbar = QtWidgets.QStatusBar(MainWindow)
-            self.statusbar.setObjectName("statusbar")
-            MainWindow.setStatusBar(self.statusbar)
+            # Hide menubar and statusbar for fullscreen appearance without white areas
+            MainWindow.setMenuBar(None)
+            MainWindow.setStatusBar(None)
 
             self.retranslateUi(MainWindow)
             QtCore.QMetaObject.connectSlotsByName(MainWindow)
-            
+
             # Add resize event handler
             MainWindow.resizeEvent = self.handle_resize
 
@@ -163,59 +137,61 @@ class Ui_MainWindow(object):
             if hasattr(self, 'centralwidget'):
                 for child in self.centralwidget.children():
                     child.deleteLater()
-            
+
             # Create basic layout
             self.centralwidget = QtWidgets.QWidget(MainWindow)
             MainWindow.setCentralWidget(self.centralwidget)
             layout = QtWidgets.QVBoxLayout(self.centralwidget)
-            
+
             # Error message
             error_label = QtWidgets.QLabel("An error occurred during application startup. Please restart the application.")
             error_label.setStyleSheet("color: red; font-size: 16px;")
             layout.addWidget(error_label)
-            
+
             # Basic buttons
             translation_btn = QtWidgets.QPushButton("Translation")
             translation_btn.clicked.connect(self.open_translation_safe)
             layout.addWidget(translation_btn)
-            
+
             dictionary_btn = QtWidgets.QPushButton("Sign Library")
             dictionary_btn.clicked.connect(self.open_dictionary_safe)
             layout.addWidget(dictionary_btn)
-            
+
             guide_btn = QtWidgets.QPushButton("User Guide")
             guide_btn.clicked.connect(self.open_user_guide_safe)
             layout.addWidget(guide_btn)
-            
+
             # Exit button
             exit_btn = QtWidgets.QPushButton("Exit")
             exit_btn.clicked.connect(MainWindow.close)
             layout.addWidget(exit_btn)
-            
+
         except Exception as e:
             print(f"Critical error creating fallback UI: {e}")
 
     def handle_resize(self, event):
         width = event.size().width()
         height = event.size().height()
-        
+
+        # Update background label size
+        if hasattr(self, 'background_label'):
+            self.background_label.setGeometry(QtCore.QRect(0, 0, width, height))
+
         # Calculate scale factor based on both width and height
         width_scale = width / 1920
         height_scale = height / 1080
         scale_factor = min(width_scale, height_scale)
-        
+
         # Adjust scale factor for different screen sizes
         if width < 768:  # Mobile devices
             scale_factor *= 1.2  # Slightly larger elements on mobile
             # Hide decorative images on very small screens
-            self.label_4.setVisible(width > 480)
-            self.label_2.setVisible(width > 480)
-            self.label_3.setVisible(width > 480)
+            # Ensure UserGuideButton visibility logic is separate and correct if needed
+            # For now, we assume UserGuideButton should always be visible or its logic is handled elsewhere
         else:
-            self.label_4.setVisible(True)
-            self.label_2.setVisible(True)
-            self.label_3.setVisible(True)
-            
+            # Ensure UserGuideButton visibility logic is separate and correct if needed
+            pass # No specific visibility changes for these labels on larger screens anymore
+
         # Scale and center elements
         self.center_elements(width, height, scale_factor)
 
@@ -223,10 +199,10 @@ class Ui_MainWindow(object):
         # Scale button sizes
         button_width = int(271 * scale_factor)
         button_height = int(51 * scale_factor)
-        
+
         # Calculate border radius based on button height
         border_radius = int(button_height / 2)
-        
+
         # Update button styles with dynamic border radius
         button_style = f"""
             QPushButton {{
@@ -240,23 +216,18 @@ class Ui_MainWindow(object):
                 background-color: #a2defa;
             }}
         """
-        
-        # Scale logo size
-        logo_width = int(971 * scale_factor)
-        logo_height = int(481 * scale_factor)
-        
-        # Calculate center positions
+
+        # Calculate center x position for buttons
         center_x = (width - button_width) // 2
-        logo_center_x = (width - logo_width) // 2
-        
+
         # Update button positions and styles
         for button in [self.TranslationButton, self.SignLibraryButton, self.UserGuideButton]:
             button.setStyleSheet(button_style)
-        
+
         # Calculate vertical spacing between buttons
         button_spacing = int(70 * scale_factor)
         start_y = int(height * 0.5)  # Start buttons from middle of screen
-        
+
         # Position buttons with consistent spacing
         self.TranslationButton.setGeometry(QtCore.QRect(
             center_x,
@@ -264,7 +235,7 @@ class Ui_MainWindow(object):
             button_width,
             button_height
         ))
-        
+
         # Position Sign Library button immediately after Translation button
         self.SignLibraryButton.setGeometry(QtCore.QRect(
             center_x,
@@ -272,7 +243,7 @@ class Ui_MainWindow(object):
             button_width,
             button_height
         ))
-        
+
         # Position User Guide button immediately after Sign Library button
         self.UserGuideButton.setGeometry(QtCore.QRect(
             center_x,
@@ -280,60 +251,7 @@ class Ui_MainWindow(object):
             button_width,
             button_height
         ))
-        
-        # Update logo position (centered at top)
-        self.label.setGeometry(QtCore.QRect(
-            logo_center_x,
-            int(height * 0.05),  # 5% from top
-            logo_width,
-            logo_height
-        ))
-        
-        # Update decorative images if visible
-        if self.label_4.isVisible():
-            cross_size = int(271 * scale_factor)
-            self.label_4.setGeometry(QtCore.QRect(
-                int(width * 0.05),  # 5% from left
-                int(height * 0.05),  # 5% from top
-                cross_size,
-                cross_size
-            ))
-            self.label_4.setPixmap(QtGui.QPixmap("images/CrossUpperLeft.png").scaled(
-                cross_size, cross_size, 
-                QtCore.Qt.KeepAspectRatio, 
-                QtCore.Qt.SmoothTransformation
-            ))
-        
-        if self.label_2.isVisible():
-            doctor_width = int(791 * scale_factor)
-            doctor_height = int(511 * scale_factor)
-            self.label_2.setGeometry(QtCore.QRect(
-                int(-80 * scale_factor),
-                int(height * 0.5),  # Middle of screen
-                doctor_width,
-                doctor_height
-            ))
-            self.label_2.setPixmap(QtGui.QPixmap("images/doctorBottomLeft.png").scaled(
-                doctor_width, doctor_height,
-                QtCore.Qt.KeepAspectRatio,
-                QtCore.Qt.SmoothTransformation
-            ))
-        
-        if self.label_3.isVisible():
-            deaf_width = int(791 * scale_factor)
-            deaf_height = int(511 * scale_factor)
-            self.label_3.setGeometry(QtCore.QRect(
-                width - deaf_width - int(width * 0.05),  # 5% from right
-                int(height * 0.5),  # Middle of screen
-                deaf_width,
-                deaf_height
-            ))
-            self.label_3.setPixmap(QtGui.QPixmap("images/deafBottomRight.png").scaled(
-                deaf_width, deaf_height,
-                QtCore.Qt.KeepAspectRatio,
-                QtCore.Qt.SmoothTransformation
-            ))
-        
+
         # Update icon sizes
         icon_width = int(200 * scale_factor)
         icon_height = int(130 * scale_factor)
@@ -343,7 +261,7 @@ class Ui_MainWindow(object):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "SalinSign"))
-        
+
         # Set up exception handling for button connections
         try:
             # Connect buttons to their respective functions
@@ -396,7 +314,7 @@ class Ui_MainWindow(object):
     def open_translation(self):
         # Force garbage collection to free memory
         gc.collect()
-        
+
         try:
             # If module is already preloaded, just show it
             if self.translation_window is not None:
@@ -414,17 +332,17 @@ class Ui_MainWindow(object):
             # Show error message
             QtWidgets.QMessageBox.critical(self.window, "Error", 
                 f"Could not open Translation module: {str(e)}")
-        
+
     def open_dictionary(self):
         # Force garbage collection to free memory
         gc.collect()
-        
+
         try:
             # Clean up existing window if it exists
             if self.dictionary_window is not None:
                 self.dictionary_window.close()
                 self.dictionary_window = None
-                
+
             from sign_language_library import SignLanguageLibrary
             self.dictionary_window = SignLanguageLibrary()
             self.dictionary_window.showFullScreen()  # Make window full screen
@@ -434,17 +352,17 @@ class Ui_MainWindow(object):
             # Show error message
             QtWidgets.QMessageBox.critical(self.window, "Error", 
                 f"Could not open Sign Library: {str(e)}")
-        
+
     def open_user_guide(self):
         # Force garbage collection to free memory
         gc.collect()
-        
+
         try:
             # Clean up existing window if it exists
             if self.user_guide_window is not None:
                 self.user_guide_window.close()
                 self.user_guide_window = None
-                
+
             from UserGuide import UserGuideModule
             self.user_guide_window = UserGuideModule()
             self.user_guide_window.showFullScreen()  # Make window full screen
