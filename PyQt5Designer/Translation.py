@@ -1,9 +1,9 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit,
                            QScrollArea, QSizePolicy, QFrame, QCheckBox, QDialog, QComboBox,
-                           QFormLayout, QDialogButtonBox, QGroupBox)
-from PyQt5.QtCore import Qt, QSize, QUrl, QThread, pyqtSignal, QByteArray, QTime, QTimer
-from PyQt5.QtGui import QPixmap, QCursor, QFont, QImage
+                           QFormLayout, QDialogButtonBox, QGroupBox, QLayout)
+from PyQt5.QtCore import Qt, QSize, QUrl, QThread, pyqtSignal, QByteArray, QTime, QTimer, QRect
+from PyQt5.QtGui import QPixmap, QCursor, QFont, QImage, QPainter, QColor
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 import sys
 import os
@@ -813,29 +813,31 @@ class MedicalSummaryTemplate(QDialog):
 
         layout.addLayout(button_layout)
 
-        # Summary display
-        self.summary_display = QTextEdit()
-        self.summary_display.setReadOnly(True)
-        self.summary_display.setPlaceholderText("Summary will appear here...")
-        self.summary_display.hide()  # Hidden initially
-        layout.addWidget(self.summary_display)
-
-        # Add to Chat button (hidden initially)
-        self.add_to_chat_button = QPushButton("Add to Chat")
-        self.add_to_chat_button.clicked.connect(self.accept)
-        self.add_to_chat_button.hide()
-        layout.addWidget(self.add_to_chat_button)
-
     def generate_summary(self):
-        """Generate and display a summary of the medical information"""
+        """Generate and display a summary of the medical information in a new popup window"""
         symptoms = self.symptoms_edit.toPlainText().strip()
         diagnosis = self.diagnosis_edit.toPlainText().strip()
         prescription = self.prescription_edit.toPlainText().strip()
 
         # Check if any field is empty
         if not symptoms or not diagnosis or not prescription:
-            self.summary_display.setHtml("<span style='color:red'>Please fill in all fields to generate a summary.</span>")
-            self.summary_display.show()
+            error_dialog = QDialog(self)
+            error_dialog.setWindowTitle("Error")
+            error_dialog.setFixedSize(300, 150)
+            
+            error_layout = QVBoxLayout(error_dialog)
+            error_label = QLabel("Please fill in all fields to generate a summary.")
+            error_label.setStyleSheet("color: red; font-size: 14px;")
+            error_label.setWordWrap(True)
+            error_label.setAlignment(Qt.AlignCenter)
+            
+            ok_button = QPushButton("OK")
+            ok_button.clicked.connect(error_dialog.accept)
+            
+            error_layout.addWidget(error_label)
+            error_layout.addWidget(ok_button, alignment=Qt.AlignCenter)
+            
+            error_dialog.exec_()
             return
 
         # Create formatted summary
@@ -860,22 +862,327 @@ class MedicalSummaryTemplate(QDialog):
         </div>
         """
 
-        # Display the summary
-        self.summary_display.setHtml(summary)
-        self.summary_display.show()
-
-        # Show Add to Chat button
-        self.add_to_chat_button.show()
-
-        # Store plain text summary for returning
-        self.plain_summary = f"""Medical Summary
-        
-Symptoms:
+        # Store plain text summary for returning with improved spacing
+        # Remove "Medical Summary" header and ensure proper line breaks between sections
+        self.plain_summary = f"""Symptoms:
 {symptoms}
+
 Diagnosis:
 {diagnosis}
+
 Prescription:
 {prescription}"""
+
+        # Create a new popup window to display the summary
+        preview_dialog = QDialog(self)
+        preview_dialog.setWindowTitle("Medical Summary Preview")
+        preview_dialog.setMinimumSize(600, 500)
+        
+        preview_layout = QVBoxLayout(preview_dialog)
+        
+        # Add the summary to a QTextEdit with HTML
+        summary_display = QTextEdit()
+        summary_display.setReadOnly(True)
+        summary_display.setHtml(summary)
+        preview_layout.addWidget(summary_display)
+        
+        # Button layout for the preview dialog
+        preview_buttons = QHBoxLayout()
+        
+        # Add to Chat button
+        add_to_chat_button = QPushButton("Add to Chat")
+        add_to_chat_button.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        add_to_chat_button.clicked.connect(lambda: [preview_dialog.accept(), self.accept()])
+        preview_buttons.addWidget(add_to_chat_button)
+        
+        # Cancel button
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setStyleSheet("""
+            QPushButton {
+                padding: 10px 20px;
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+        """)
+        cancel_button.clicked.connect(preview_dialog.reject)
+        preview_buttons.addWidget(cancel_button)
+        
+        preview_layout.addLayout(preview_buttons)
+        
+        # Show the preview dialog
+        if preview_dialog.exec_() == QDialog.Accepted:
+            # User clicked "Add to Chat", so we already set self.accept() above
+            # This will be handled by the calling code
+            pass
+        else:
+            # User clicked "Cancel", do nothing
+            pass
+
+# --- Chat Bubble Widget ---
+class ChatBubble(QLabel):
+    def __init__(self, message, user_type="Patient", parent=None):
+        super().__init__(parent)
+        # Store original message for width calculations
+        self.original_message = message
+        
+        # Use rich text for better rendering
+        self.setTextFormat(Qt.RichText)
+        
+        # Break long words if absolutely necessary but preserve spaces
+        # Better handling for word-wrapping using HTML approach
+        processed_message = ""
+        for word in message.split():
+            # Add each word with a non-breaking space between
+            if processed_message:
+                processed_message += " "  # Regular space for word separation
+            processed_message += word
+        
+        # Handle newlines
+        processed_message = processed_message.replace("\n", "<br>")
+        
+        # Use display text styling for better rendering - fluid width
+        display_text = f"""
+        <div style='white-space: normal; word-wrap: break-word; 
+                  word-break: normal; line-height: 130%;
+                  text-align: left; display: inline-block;'>
+            {processed_message}
+        </div>
+        """
+        
+        # Set the processed text
+        self.setText(display_text)
+        
+        # Set font
+        self.setFont(QFont("Arial", 14))
+        
+        # Calculate width based on content
+        fm = self.fontMetrics()
+        
+        # Make width truly dynamic based on content
+        words = message.split()
+        word_count = len(words)
+        
+        # Get screen dimensions for maximum bounds
+        screen_width = QApplication.desktop().screenGeometry().width()
+        max_available_width = min(screen_width * 0.8, 800)  # 80% of screen width up to 800px
+        
+        # For very short messages (1-3 words), fit exactly to content plus padding
+        if word_count <= 3:
+            # Get exact width needed for text + minimal padding
+            text_width = fm.horizontalAdvance(message)
+            padding = fm.averageCharWidth() * 2  # Add just 1 character worth on each side
+            
+            # Set extremely tight fit for short messages
+            min_width = text_width + padding
+            max_width = min_width * 1.1  # Just a tiny bit of flexibility
+        
+        # For medium-length messages (4-15 words)
+        elif word_count <= 15:
+            # Get width based on content
+            text_width = fm.horizontalAdvance(message)
+            
+            # Use natural width with modest padding
+            min_width = text_width * 0.9  # Allow slightly less than text width to enable wrapping
+            max_width = min(text_width * 1.2, max_available_width * 0.6)  # Moderate max width
+        
+        # For longer messages
+        else:
+            # Get width based on a reasonable target line length
+            avg_chars_per_word = sum(len(w) for w in words) / word_count
+            ideal_chars_per_line = min(60, avg_chars_per_word * 8)  # Target ~8 words per line
+            
+            # Calculate width based on ideal line length
+            min_width = fm.averageCharWidth() * ideal_chars_per_line
+            
+            # For very long messages, use more horizontal space
+            if word_count > 30:
+                max_width = max_available_width
+            else:
+                max_width = min(max_available_width * 0.75, fm.averageCharWidth() * ideal_chars_per_line * 1.5)
+        
+        # Allow minimums to be very small for short messages
+        min_width = max(50, min_width)
+        
+        # Ensure max isn't smaller than min
+        max_width = max(min_width * 1.1, max_width)
+        
+        # Set constraints with more flexibility for longer messages
+        self.setMinimumWidth(int(min_width))
+        self.setMaximumWidth(int(max_width))
+        
+        # Ensure content fits
+        self.adjustSize()
+        
+        # Enable word wrap (works with rich text)
+        self.setWordWrap(True)
+        
+        # Set styling based on user type
+        if user_type == "Patient":
+            bg_color = "#00c29d"  # Teal
+            text_color = "white"
+        else:  # Doctor
+            bg_color = "#0084ff"  # Blue
+            text_color = "white"
+            
+        self.setStyleSheet(f"""
+            QLabel {{
+                background-color: {bg_color};
+                color: {text_color};
+                border-radius: 15px;
+                padding: 8px 10px;  /* Reduced padding */
+                margin: 2px;
+            }}
+        """)
+        
+        # Set alignment based on user type
+        alignment = Qt.AlignLeft if user_type == "Doctor" else Qt.AlignRight
+        self.setAlignment(alignment)
+        
+        # Set size policy to make bubble adapt to content while respecting constraints
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+
+# --- Message Item Widget ---
+class MessageItem(QWidget):
+    def __init__(self, message, user_type="Patient", parent=None):
+        super().__init__(parent)
+        self.layout = QHBoxLayout(self)
+        self.layout.setContentsMargins(10, 5, 10, 5)
+        self.layout.setSpacing(12)  # Increased spacing between elements
+        
+        # Set size policy to use available space
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        
+        # Create avatar label with visible styling
+        self.avatar = QLabel()
+        
+        # Load the respective image directly from the images folder
+        # Always use the standard image path - no fallbacks
+        image_path = f"images/{user_type.lower()}.png"
+        
+        # Create blank transparent pixmap for the result
+        avatar_pixmap = QPixmap(50, 50)
+        avatar_pixmap.fill(Qt.transparent)
+        
+        try:
+            # Load the source image
+            source_pixmap = QPixmap(image_path)
+            
+            # Create a painter to draw on the result
+            painter = QPainter(avatar_pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            
+            # Create a circular mask
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(Qt.white)
+            painter.drawEllipse(0, 0, 50, 50)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+            
+            # Calculate centered crop of source image with zoom
+            src_width = source_pixmap.width()
+            src_height = source_pixmap.height()
+            size = min(src_width, src_height)
+            
+            # Use original size instead of zooming
+            zoom_factor = 1.0  # Use 100% of original size (no zoom)
+            zoomed_size = int(size * zoom_factor)
+            
+            # Center crop to square with zoom effect
+            src_x = (src_width - zoomed_size) // 2
+            src_y = (src_height - zoomed_size) // 2
+            
+            # Draw the cropped and scaled source image
+            target_rect = QRect(0, 0, 50, 50)
+            source_rect = QRect(src_x, src_y, zoomed_size, zoomed_size)
+            painter.drawPixmap(target_rect, source_pixmap, source_rect)
+            painter.end()
+        except Exception as e:
+            print(f"Error loading avatar from {image_path}: {e}")
+            
+            # Use user type color as fallback if needed
+            color = "#00c29d" if user_type == "Patient" else "#0084ff"
+            
+            # Draw a colored circle as a fallback
+            painter = QPainter(avatar_pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setBrush(QColor(color))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(0, 0, 50, 50)
+            
+            # Add text (initial letter)
+            painter.setPen(Qt.white)
+            painter.setFont(QFont("Arial", 20, QFont.Bold))
+            painter.drawText(avatar_pixmap.rect(), Qt.AlignCenter, user_type[0])
+            painter.end()
+            
+        self.avatar.setPixmap(avatar_pixmap)
+        self.avatar.setFixedSize(50, 50)
+        self.avatar.setAlignment(Qt.AlignCenter)
+        
+        # No background or border - completely transparent avatar container
+        self.avatar.setStyleSheet("""
+            QLabel {
+                background-color: transparent;
+                border: none;
+                border-radius: 25px;
+                padding: 0px;
+            }
+        """)
+        
+        # Create message container with vertical layout
+        self.message_container = QWidget()
+        self.message_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self.message_layout = QVBoxLayout(self.message_container)
+        self.message_layout.setContentsMargins(0, 0, 0, 0)
+        self.message_layout.setSpacing(2)
+        self.message_layout.setSizeConstraint(QLayout.SetMinAndMaxSize)  # Makes layout resize to content
+        
+        # Add sender name if needed
+        self.sender_label = QLabel(user_type)
+        # Match label color to the bubble color
+        label_color = "#00c29d" if user_type == "Patient" else "#0084ff"  # Match bubble colors
+        self.sender_label.setStyleSheet(f"color: {label_color}; font-weight: bold; font-size: 12px;")
+        self.message_layout.addWidget(self.sender_label)
+        
+        # Add message bubble
+        self.bubble = ChatBubble(message, user_type)
+        self.message_layout.addWidget(self.bubble)
+        
+        # Add timestamp
+        time_str = QTime.currentTime().toString("hh:mm")
+        self.time_label = QLabel(time_str)
+        self.time_label.setStyleSheet("color: #888888; font-size: 10px;")
+        self.time_label.setAlignment(Qt.AlignRight if user_type == "Doctor" else Qt.AlignLeft)
+        self.message_layout.addWidget(self.time_label)
+        
+        # FIXED: Arrange components based on user type - Doctor on right, Patient on left
+        if user_type == "Patient":  # Patient on the left
+            self.layout.addWidget(self.avatar)
+            self.layout.addWidget(self.message_container)
+            self.layout.addStretch()
+        else:  # Doctor on the right
+            self.layout.addStretch()
+            self.layout.addWidget(self.message_container)
+            self.layout.addWidget(self.avatar)
 
 class TranslationModule(QMainWindow):
     def __init__(self):
@@ -904,6 +1211,8 @@ class TranslationModule(QMainWindow):
 
         # Camera switching lock to prevent race conditions
         self.camera_switching = False
+
+        # No custom icons - always using patient.png and doctor.png from images folder
 
         # Detect available cameras
         self.available_cameras = get_available_cameras()
@@ -1170,23 +1479,49 @@ class TranslationModule(QMainWindow):
         self.chat_header.setAlignment(Qt.AlignCenter)
         self.box2_layout.addWidget(self.chat_header)
 
-        # Chat Box
-        self.chat_box = QTextEdit()
-        self.chat_box.setReadOnly(True)
-        self.chat_box.setObjectName("chatBox")
-        self.chat_box.setPlaceholderText("No messages yet. Start typing to begin the conversation.")
-        self.chat_box.setStyleSheet("""
-            QTextEdit {
+        # Chat Box - Replace QTextEdit with a scrollable widget container
+        self.chat_container = QWidget()
+        self.chat_layout = QVBoxLayout(self.chat_container)
+        self.chat_layout.setSpacing(5)  # Reduced default spacing
+        self.chat_layout.setContentsMargins(5, 10, 5, 10)  # Add some padding
+        self.chat_layout.addStretch()  # Push messages to the top
+        
+        self.chat_scroll = QScrollArea()
+        self.chat_scroll.setWidgetResizable(True)
+        self.chat_scroll.setWidget(self.chat_container)
+        self.chat_scroll.setObjectName("chatBox")
+        self.chat_scroll.setStyleSheet("""
+            QScrollArea {
                 background-color: white;
                 border: 1px solid #ddd;
                 border-radius: 5px;
-                padding: 10px;
-                font-size: 18px;  /* Increased from 14px */
+                padding: 5px;
                 min-height: 300px;
             }
+            QScrollBar:vertical {
+                border: none;
+                background: #f1f1f1;
+                width: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #888;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #555;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
+            }
         """)
-        self.box2_layout.addWidget(self.chat_box)
-
+        self.box2_layout.addWidget(self.chat_scroll)
+        
         # Sign Language Display Area
         self.sign_display_scroll = QScrollArea()
         self.sign_display_scroll.setWidgetResizable(True)
@@ -1200,16 +1535,23 @@ class TranslationModule(QMainWindow):
             QScrollBar:vertical {
                 border: none;
                 background: #f1f1f1;
-                width: 10px;
+                width: 8px;
                 margin: 0px;
+                border-radius: 4px;
             }
             QScrollBar::handle:vertical {
                 background: #888;
                 min-height: 20px;
-                border-radius: 5px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #555;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 height: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;
             }
         """)
 
@@ -1510,7 +1852,39 @@ class TranslationModule(QMainWindow):
         # Update font sizes
         font_size = max(12, int(14 * scale_factor))
         self.input_user2.setStyleSheet(f"font-size: {font_size}px;")
-        self.chat_box.setStyleSheet(f"font-size: {font_size}px;")
+        
+        # Update the chat scroll area style
+        self.chat_scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: white;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 5px;
+                min-height: 300px;
+                font-size: {font_size}px;
+            }}
+            QScrollBar:vertical {{
+                border: none;
+                background: #f1f1f1;
+                width: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: #888;
+                min-height: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: #555;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+        """)
 
         # Update button sizes
         button_width = max(80, int(100 * scale_factor))
@@ -1528,7 +1902,7 @@ class TranslationModule(QMainWindow):
             chat_height = int(height * 0.4)
         else:
             chat_height = int(height * 0.4)
-        self.chat_box.setMinimumHeight(chat_height)
+        self.chat_scroll.setMinimumHeight(chat_height)
 
         # Update sign display size if visible
         if not self.text_mode:
@@ -1730,21 +2104,38 @@ class TranslationModule(QMainWindow):
         # Update the display based on the current mode
         if self.text_mode:
             # Show text messages and hide sign language
-            self.chat_box.show()
+            self.chat_scroll.show()
             self.sign_display_scroll.hide()
-            self.display_messages()
+            self.refresh_chat_widgets()
         else:
             # Hide text messages and show sign language
-            self.chat_box.hide()
+            self.chat_scroll.hide()
             self.sign_display_scroll.show()
-
+            
             # Ensure the sign display has its layout updated before showing
             self.sign_display_scroll.setWidgetResizable(True)
             self.sign_display.setMinimumWidth(self.box2.width() - 50)  # Allow enough width for the signs
-
+            
             # Clear and update sign language display for all messages
             self.update_sign_display_for_all_messages()
-
+    
+    def refresh_chat_widgets(self):
+        """Recreate all message widgets from messages list"""
+        # Clear existing widgets from chat layout
+        while self.chat_layout.count() > 1:  # Keep the stretch item at the end
+            item = self.chat_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Add all messages back as widgets
+        for msg in self.messages:
+            self.add_message_widget(msg["user"], msg["text"])
+        
+        # Scroll to bottom
+        QTimer.singleShot(100, lambda: self.chat_scroll.verticalScrollBar().setValue(
+            self.chat_scroll.verticalScrollBar().maximum()
+        ))
+    
     def update_sign_display_for_all_messages(self):
         """Update sign language display for all messages"""
         self.clear_sign_display()
@@ -1769,14 +2160,41 @@ class TranslationModule(QMainWindow):
 
             # Display all sign images
             self.display_sign_images(all_sign_images)
-
+    
+    def clear_chat(self):
+        """Clear all chat messages and sign language display"""
+        # Clear messages list
+        self.messages = []
+        
+        # Clear chat widgets
+        while self.chat_layout.count() > 1:  # Keep the stretch item at the end
+            item = self.chat_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Clear sign language display
+        self.clear_sign_display()
+        
+        # Clear translation box and accumulated characters
+        self.translation_box.clear()
+        self.accumulated_chars = ""
+    
     def send_message(self, user, message):
         if not message.strip():
             return
-
+        
         # Add message to list
         self.messages.append({"user": user, "text": message})
-
+        
+        if self.text_mode:
+            # In text mode, add the message widget to the chat
+            self.add_message_widget(user, message)
+            
+            # Scroll to the bottom
+            QTimer.singleShot(100, lambda: self.chat_scroll.verticalScrollBar().setValue(
+                self.chat_scroll.verticalScrollBar().maximum()
+            ))
+            
         if user == "Doctor":
             if not self.text_mode:
                 # In sign mode, only show the latest message
@@ -1789,195 +2207,40 @@ class TranslationModule(QMainWindow):
                     all_sign_images.extend(sign_images)
                     all_sign_images.append(None)  # Add word boundary marker
                 self.display_sign_images(all_sign_images)
-            else:
-                # In text mode, just display the messages
-                self.display_messages()
             self.input_user2.clear()
-        else:
-            # For patient messages, only update in text mode
-            if self.text_mode:
-                self.display_messages()
-
-    def display_messages(self):
-        # Clear the chatbox
-        self.chat_box.clear()
-
-        # Create HTML for all messages with inline styles to ensure bubbles appear
-        html_content = """
-        <html>
-        <head>
-            <style>
-                body {
-                    margin: 0;
-                    padding: 0;
-                    font-family: Arial, sans-serif;
-                    background-color: white;
-                }
-                .message-row {
-                    width: 100%;
-                    clear: both;
-                    overflow: hidden;
-                    margin-bottom: 8px;
-                    display: flex;
-                    flex-direction: column;
-                }
-                .message-container-left {
-                    align-self: flex-start;
-                    max-width: 70%;
-                    margin-left: 10px;
-                    display: flex;
-                    align-items: center;
-                    gap: 2px;
-                }
-                .message-container-right {
-                    align-self: flex-end;
-                    max-width: 70%;
-                    margin-right: 10px;
-                    display: flex;
-                    align-items: center;
-                    gap: 2px;
-                    flex-direction: column;
-                    align-items: flex-end;
-                }
-                .message-bubble {
-                    border-radius: 20px;
-                    padding: 10px 15px; /* Ensured padding */
-                    display: inline-block;
-                    word-wrap: break-word;
-                    font-size: 18px;
-                    line-height: 1.4;
-                    position: relative;
-                    min-width: min-content;
-                    max-width: 100%;
-                    box-sizing: border-box;
-                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-                }
-                .patient-bubble {
-                    background-color: #00c29d;
-                    color: white;
-                    border-radius: 20px; /* Explicitly set border-radius */
-                    margin-left: 40px;
-                    margin-right: 100px;
-                }
-                .doctor-bubble {
-                    background-color: #0084ff;
-                    color: white;
-                    border-radius: 20px; /* Explicitly set border-radius */
-                    margin-right: 40px;
-                    margin-left: 100px;
-                }
-                .message-text {
-                    white-space: pre-wrap;
-                    display: inline-block;
-                    width: auto;
-                    min-width: min-content;
-                    padding: 4px 0;
-                }
-                .message-sender {
-                    font-weight: bold;
-                    margin-bottom: 2px;
-                    font-size: 16px;
-                    padding-left: 8px;
-                    padding-right: 8px;
-                }
-                .patient-sender {
-                    color: #0066cc;
-                    text-align: left;
-                }
-                .doctor-sender {
-                    color: #009933;
-                    text-align: right;
-                }
-                .user-icon-patient {
-                    width: 15px;
-                    height: 15px;
-                    padding-top: 50px;
-                    border-radius: 50%;
-                    object-fit: cover;
-                    margin-bottom: 4px;
-                    float: left;
-                }
-                .user-icon-doctor {
-                    width: 15px;
-                    height: 15px;
-                    margin-top: 250px;
-                    border-radius: 50%;
-                    object-fit: cover;
-                    margin-bottom: 4px;
-                    float: right;
-                }
-                .message-time {
-                    font-size: 11px;
-                    color: rgba(255, 255, 255, 0.8);
-                    margin-top: 4px;
-                    display: block;
-                    text-align: right;
-                }
-            </style>
-        </head>
-        <body>
-        """
-
-        # Get the current time for message timestamps
-        current_time = QTime.currentTime().toString("hh:mm")
-
-        for idx, msg in enumerate(self.messages):
-            # Add spacing between different senders
-            if idx > 0 and self.messages[idx-1]["user"] != msg["user"]:
-                html_content += '<div style="height: 10px;"></div>'
-            
-            # Determine if we should show the sender label
-            # Only show it for the first message from each sender in a sequence
-            show_sender = (idx == 0) or (self.messages[idx-1]["user"] != msg["user"])
-                
-            if msg["user"] == "Patient":
-                # Patient message - left aligned
-                if show_sender:
-                    html_content += f'<div class="message-sender patient-sender">{msg["user"]}</div>'
-
-                html_content += f"""
-                <div class="message-row">
-                    <div class="message-container-left">
-                        <img src="images/PatientIcon.png" class="user-icon-patient" alt="Patient">
-                        <div class="message-bubble patient-bubble">
-                            <div class="message-text">{msg["text"]}</div>
-                            <span class="message-time">{current_time}</span>
-                        </div>
-                    </div>
-                </div>
-                """
-            else:
-                # Doctor message - right aligned
-                if show_sender:
-                    html_content += f'<div class="message-sender doctor-sender">{msg["user"]}</div>'
-
-                html_content += f"""
-                <div class="message-row">
-                    <div class="message-container-right">
-                        <img src="images/DoctorIcon.png" class="user-icon-doctor" alt="Doctor">
-                        <div class="message-bubble doctor-bubble">
-                            <div class="message-text">{msg["text"]}</div>
-                            <span class="message-time">{current_time}</span>    
-                        </div>
-                    </div>
-                </div>
-                """
-
-        # Add some spacing at the bottom for better scrolling
-        html_content += """
-        <div style="height: 20px"></div>
-        </body>
-        </html>
-        """
-
-        # Set the HTML content
-        self.chat_box.setHtml(html_content)
-
-        # Scroll to the bottom of the chat box
-        cursor = self.chat_box.textCursor()
-        cursor.movePosition(cursor.End)
-        self.chat_box.setTextCursor(cursor)
-
+    
+    def add_message_widget(self, user, message):
+        """Add a message widget to the chat layout"""
+        # Check if we should show sender name
+        show_sender = True
+        if len(self.messages) > 1:
+            # Check if the previous message was from the same sender
+            if self.messages[-2]["user"] == user:
+                show_sender = False
+        
+        # Create message item (ignoring custom icons - always using standard images)
+        message_item = MessageItem(message, user, self.chat_container)
+        
+        # Hide sender label if not needed
+        if not show_sender:
+            message_item.sender_label.hide()
+        
+        # Add spacing widget if this is a new sender (different from previous)
+        if len(self.messages) > 1 and self.messages[-2]["user"] != user:
+            spacer = QWidget()
+            spacer.setFixedHeight(15)  # 15px spacing between different senders
+            self.chat_layout.insertWidget(self.chat_layout.count() - 1, spacer)
+        
+        # Force layout update to ensure proper sizing
+        message_item.bubble.adjustSize()
+        message_item.updateGeometry()
+        
+        # Insert before the stretch at the end
+        self.chat_layout.insertWidget(self.chat_layout.count() - 1, message_item)
+        
+        # Process events to ensure sizing takes effect
+        QApplication.processEvents()
+    
     def go_back(self, event):
         """Return to the main menu when the back button is clicked"""
         try:
@@ -2422,21 +2685,6 @@ class TranslationModule(QMainWindow):
         # Always call parent's hideEvent
         super().hideEvent(event)
 
-    def clear_chat(self):
-        """Clear all chat messages and sign language display"""
-        # Clear messages list
-        self.messages = []
-
-        # Clear chat box
-        self.chat_box.clear()
-
-        # Clear sign language display
-        self.clear_sign_display()
-
-        # Clear translation box and accumulated characters
-        self.translation_box.clear()
-        self.accumulated_chars = ""
-
     def show_tooltip(self, event):
         """Show the tooltip popup window when tooltip button is clicked"""
         popup = PopupWindow(
@@ -2492,6 +2740,9 @@ class TranslationModule(QMainWindow):
             # If dialog is accepted, add the summary to chat
             if hasattr(dialog, 'plain_summary'):
                 self.send_message("Doctor", dialog.plain_summary)
+
+    # Custom icon methods removed - we're always using patient.png and doctor.png
+    # No longer supporting custom icons at runtime
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
