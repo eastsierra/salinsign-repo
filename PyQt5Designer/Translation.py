@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                            QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit,
                            QScrollArea, QSizePolicy, QFrame, QCheckBox, QDialog, QComboBox,
-                           QFormLayout, QDialogButtonBox, QGroupBox, QLayout)
-from PyQt5.QtCore import Qt, QSize, QUrl, QThread, pyqtSignal, QByteArray, QTime, QTimer, QRect
+                           QFormLayout, QDialogButtonBox, QGroupBox, QLayout, QCompleter)
+from PyQt5.QtCore import Qt, QSize, QUrl, QThread, pyqtSignal, QByteArray, QTime, QTimer, QRect, QStringListModel
 from PyQt5.QtGui import QPixmap, QCursor, QFont, QImage, QPainter, QColor
 from PyQt5.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 import sys
@@ -279,11 +279,11 @@ class SignLanguageThread(QThread):
                                 else:
                                     predicted_character = "Sign language not recognized"
                                 
-                                # Draw rectangle around hand
-                                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 4)
+                                # Draw rectangle around hand with green color
+                                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 4)
                                 
-                                # Show prediction text above hand
-                                cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3, cv2.LINE_AA)
+                                # Show prediction text above hand with green color
+                                cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3, cv2.LINE_AA)
 
                                 # Emit the predicted character only if it's a recognized gesture
                                 if predicted_character != "Sign language not recognized":
@@ -863,15 +863,16 @@ class MedicalSummaryTemplate(QDialog):
         """
 
         # Store plain text summary for returning with improved spacing
-        # Remove "Medical Summary" header and ensure proper line breaks between sections
-        self.plain_summary = f"""Symptoms:
-{symptoms}
-
-Diagnosis:
-{diagnosis}
-
-Prescription:
-{prescription}"""
+        # Add 'Medical Summary' header at the top
+        self.plain_summary = (
+            "Medical Summary\n"
+            "Symptoms:\n"
+            f"{symptoms}\n\n"
+            "Diagnosis:\n"
+            f"{diagnosis}\n\n"
+            "Prescription:\n"
+            f"{prescription}"
+        )
 
         # Create a new popup window to display the summary
         preview_dialog = QDialog(self)
@@ -948,26 +949,37 @@ class ChatBubble(QLabel):
         # Use rich text for better rendering
         self.setTextFormat(Qt.RichText)
         
-        # Break long words if absolutely necessary but preserve spaces
-        # Better handling for word-wrapping using HTML approach
-        processed_message = ""
-        for word in message.split():
-            # Add each word with a non-breaking space between
-            if processed_message:
-                processed_message += " "  # Regular space for word separation
-            processed_message += word
+        # Check if this is a medical summary (contains "Symptoms:", "Diagnosis:", and "Prescription:")
+        is_medical_summary = ("Symptoms:" in message and "Diagnosis:" in message and "Prescription:" in message)
         
-        # Handle newlines
-        processed_message = processed_message.replace("\n", "<br>")
-        
-        # Use display text styling for better rendering - fluid width
-        display_text = f"""
-        <div style='white-space: normal; word-wrap: break-word; 
-                  word-break: normal; line-height: 130%;
-                  text-align: left; display: inline-block;'>
-            {processed_message}
-        </div>
-        """
+        if is_medical_summary:
+            # For medical summaries, preserve the exact formatting
+            processed_message = message.replace("\n", "<br>")
+            display_text = f"""
+            <div style='white-space: pre-wrap; word-wrap: break-word; 
+                      word-break: normal; line-height: 130%;
+                      text-align: left; display: inline-block;'>
+                {processed_message}
+            </div>
+            """
+        else:
+            # For normal messages, use the existing word-wrapping logic
+            processed_message = ""
+            for word in message.split():
+                if processed_message:
+                    processed_message += " "
+                processed_message += word
+            
+            # Handle newlines
+            processed_message = processed_message.replace("\n", "<br>")
+            
+            display_text = f"""
+            <div style='white-space: normal; word-wrap: break-word; 
+                      word-break: normal; line-height: 130%;
+                      text-align: left; display: inline-block;'>
+                {processed_message}
+            </div>
+            """
         
         # Set the processed text
         self.setText(display_text)
@@ -1676,6 +1688,9 @@ class TranslationModule(QMainWindow):
         self.input_user2 = QLineEdit()
         self.input_user2.setPlaceholderText("Doctor Type here...")
         self.input_user2.returnPressed.connect(lambda: self.send_message("Doctor", self.input_user2.text()))
+        
+        # Add predictive text functionality with QCompleter
+        self.setup_predictive_text()
 
         self.send_button2 = QPushButton("Send")
         self.send_button2.setCursor(QCursor(Qt.PointingHandCursor))
@@ -1762,6 +1777,46 @@ class TranslationModule(QMainWindow):
         # Add container to main layout
         self.main_layout.addLayout(self.container)
         
+    def setup_predictive_text(self):
+        """Set up predictive text for the doctor's input field"""
+        # List of common phrases for suggestions
+        phrases = [
+            "How are you feeling today?",
+            "Do you have any allergies?",
+            "Are you currently taking any medications?",
+            "Stay hydrated and get enough rest",
+            "Contact me if your symptoms worsen",
+            "Was this a problem before?",
+            "Let me know if you feel dizzy or nauseous.",
+            "I'm going to prescribe something to help.",
+            "Make sure to take your medication on time.",
+            "Very important to monitor your progress closely."
+        ]
+        
+        # Create and configure the completer
+        self.completer = QCompleter(phrases)
+        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.completer.setFilterMode(Qt.MatchStartsWith)
+        
+        # Set the completer for the input field
+        self.input_user2.setCompleter(self.completer)
+        
+        # Set up an event filter to capture Tab key for completion
+        self.input_user2.installEventFilter(self)
+    
+    def eventFilter(self, obj, event):
+        """Custom event filter to handle Tab key for text completion"""
+        if obj == self.input_user2 and event.type() == event.KeyPress:
+            # Check if Tab key is pressed and completer has an active completion
+            if event.key() == Qt.Key_Tab and self.completer.popup() and self.completer.popup().isVisible():
+                # Manually trigger the current completion
+                self.completer.activated.emit(self.completer.currentCompletion())
+                return True
+        
+        # Let other events pass through
+        return super().eventFilter(obj, event)
+    
     def toggle_edit_mode(self, state):
         """Toggle between automatic and manual translation sending modes"""
         self.edit_mode = bool(state)
