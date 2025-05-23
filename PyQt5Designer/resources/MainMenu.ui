@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1920</width>
+    <height>1080</height>
+   </rect>
+  </property>
+  <property name="font">
+   <font>
+    <family>Comic Sans MS</family>
+   </font>
+  </property>
+  <property name="acceptDrops">
+   <bool>false</bool>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <property name="tabShape">
+   <enum>QTabWidget::Rounded</enum>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <property name="styleSheet">
+    <string notr="true">background-color: rgb(255, 255, 255);  /* white */
+
+</string>
+   </property>
+   <widget class="QPushButton" name="SignLibraryButton">
+    <property name="geometry">
+     <rect>
+      <x>780</x>
+      <y>620</y>
+      <width>271</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>18</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton {
+    border-radius: 25px;  /* Adjust the value to change the roundness */
+	border: none;
+	background-color: #97cee8;  /* Replace with any color you want */
+    color: black;               /* Optional: changes the text color */
+}
+
+QPushButton:hover {
+    background-color: #a2defa;  /* Hover state */
+}</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="icon">
+     <iconset>
+      <normaloff>SignLibraryButtonIcon.png</normaloff>SignLibraryButtonIcon.png</iconset>
+    </property>
+    <property name="iconSize">
+     <size>
+      <width>200</width>
+      <height>130</height>
+     </size>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="HelpButton">
+    <property name="geometry">
+     <rect>
+      <x>780</x>
+      <y>690</y>
+      <width>271</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>18</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton {
+    border-radius: 25px;  /* Adjust the value to change the roundness */
+	border: none;
+	background-color: #97cee8;  /* Replace with any color you want */
+    color: black;               /* Optional: changes the text color */
+}
+
+QPushButton:hover {
+    background-color: #a2defa;  /* Hover state */
+}</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="icon">
+     <iconset>
+      <normaloff>HelpButtonIcon.png</normaloff>HelpButtonIcon.png</iconset>
+    </property>
+    <property name="iconSize">
+     <size>
+      <width>200</width>
+      <height>130</height>
+     </size>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="TranslationButton">
+    <property name="geometry">
+     <rect>
+      <x>780</x>
+      <y>550</y>
+      <width>271</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Comic Sans MS</family>
+      <pointsize>18</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton {
+    border-radius: 25px;  /* Adjust the value to change the roundness */
+	border: none;
+	background-color: #97cee8;  /* Replace with any color you want */
+    color: black;               /* Optional: changes the text color */
+	 box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.3);
+	cursor:pointer;
+}
+
+QPushButton:hover {
+    background-color: #a2defa;  /* Hover state */
+}
+
+
+</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="icon">
+     <iconset>
+      <normaloff>TranslateButtonIcon.png</normaloff>TranslateButtonIcon.png</iconset>
+    </property>
+    <property name="iconSize">
+     <size>
+      <width>200</width>
+      <height>130</height>
+     </size>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>-80</x>
+      <y>540</y>
+      <width>791</width>
+      <height>511</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="pixmap">
+     <pixmap resource="background.qrc">:/newPrefix/doctorBottomLeft.png</pixmap>
+    </property>
+    <property name="scaledContents">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>450</x>
+      <y>50</y>
+      <width>971</width>
+      <height>481</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="pixmap">
+     <pixmap resource="background.qrc">:/newPrefix/SalinSignLogo.png</pixmap>
+    </property>
+    <property name="scaledContents">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>1170</x>
+      <y>550</y>
+      <width>791</width>
+      <height>511</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="pixmap">
+     <pixmap resource="background.qrc">:/newPrefix/deafBottomRight.png</pixmap>
+    </property>
+    <property name="scaledContents">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_4">
+    <property name="geometry">
+     <rect>
+      <x>170</x>
+      <y>30</y>
+      <width>271</width>
+      <height>271</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="pixmap">
+     <pixmap resource="background.qrc">:/newPrefix/CrossUpperLeft.png</pixmap>
+    </property>
+    <property name="scaledContents">
+     <bool>true</bool>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1920</width>
+     <height>21</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources>
+  <include location="background.qrc"/>
+ </resources>
+ <connections/>
+</ui>
