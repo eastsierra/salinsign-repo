@@ -13,10 +13,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PyQt5.QtWidgets import QApplication
 
+import config
 from ui.navigation import NavigationManager
 
 
-def main():
+def main() -> None:
+    config.setup_logging()
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 

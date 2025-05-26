@@ -1,4 +1,29 @@
+"""
+Centralized configuration for the SalinSign application.
+
+All hardcoded values, paths, colors, model parameters, and constants
+are defined here for easy maintenance and modification.
+"""
+
+import logging
 import os
+import sys
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+LOG_LEVEL = logging.INFO
+
+
+def setup_logging() -> None:
+    """Configure the root logger for the application."""
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        format=LOG_FORMAT,
+        stream=sys.stdout,
+    )
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -24,6 +49,9 @@ def asset(filename: str) -> str:
 WINDOW_SIZE = (1920, 1080)
 WINDOW_MIN_SIZE = (360, 640)
 LIBRARY_MIN_SIZE = (600, 400)
+MOBILE_BREAKPOINT = 768
+REFERENCE_WIDTH = 1920
+REFERENCE_HEIGHT = 1080
 
 # ---------------------------------------------------------------------------
 # Camera
@@ -52,7 +80,7 @@ LABELS = {
     32: "F", 33: "G", 34: "H", 35: "I", 36: "J", 37: "K", 38: "L",
     39: "M", 40: "N", 41: "O", 42: "P", 43: "Q", 44: "R", 45: "S",
     46: "T", 47: "U", 48: "V", 49: "W", 50: "X", 51: "Y", 52: "Z",
-    53: "Hello", 54: "Good Morning", 55: "Good Afternooon",
+    53: "Hello", 54: "Good Morning", 55: "Good Afternoon",
     56: "Good Evening", 57: "Thank You", 58: "Good Bye",
     59: "3", 60: "4", 61: "5", 62: "7", 63: "8", 64: "9", 65: "10",
 }
