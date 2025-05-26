@@ -7,14 +7,17 @@ the original codebase.
 """
 
 import gc
+import logging
 
 from PyQt5.QtWidgets import QMainWindow
+
+log = logging.getLogger(__name__)
 
 
 class NavigationManager:
     """Singleton that owns all top-level window transitions."""
 
-    _instance = None
+    _instance: "NavigationManager | None" = None
 
     @classmethod
     def instance(cls) -> "NavigationManager":
@@ -22,10 +25,10 @@ class NavigationManager:
             cls._instance = cls()
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._current_window: QMainWindow | None = None
 
-    def go_to_main_menu(self):
+    def go_to_main_menu(self) -> None:
         from ui.main_menu import MainMenuWindow
 
         self._close_current()
@@ -33,7 +36,7 @@ class NavigationManager:
         window.showFullScreen()
         self._current_window = window
 
-    def go_to_translation(self, preloaded: bool = False):
+    def go_to_translation(self, preloaded: bool = False) -> None:
         from ui.translation import TranslationModule
 
         self._close_current()
@@ -42,7 +45,7 @@ class NavigationManager:
         window.showFullScreen()
         self._current_window = window
 
-    def go_to_sign_library(self):
+    def go_to_sign_library(self) -> None:
         from ui.sign_library import SignLanguageLibrary
 
         self._close_current()
@@ -50,7 +53,7 @@ class NavigationManager:
         window.showFullScreen()
         self._current_window = window
 
-    def go_to_user_guide(self):
+    def go_to_user_guide(self) -> None:
         from ui.user_guide import UserGuideModule
 
         self._close_current()
@@ -58,11 +61,11 @@ class NavigationManager:
         window.showFullScreen()
         self._current_window = window
 
-    def _close_current(self):
+    def _close_current(self) -> None:
         if self._current_window is not None:
             try:
                 self._current_window.close()
             except Exception:
-                pass
+                log.exception("Error closing current window")
             self._current_window = None
         gc.collect()

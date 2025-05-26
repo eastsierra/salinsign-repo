@@ -1,21 +1,24 @@
 """
-Main menu screen – the application hub.
+Main menu screen -- the application hub.
 
 Provides navigation buttons to the Translation, Sign Library, and User Guide
 modules.  Pre-loads the Translation module in the background for faster access.
 """
 
 import gc
+import logging
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 import config
 
+log = logging.getLogger(__name__)
+
 
 class MainMenuWindow(QtWidgets.QMainWindow):
     """Full-screen main menu with three navigation buttons."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.setObjectName("MainWindow")
         self.resize(*config.WINDOW_SIZE)
@@ -31,15 +34,15 @@ class MainMenuWindow(QtWidgets.QMainWindow):
         try:
             self._setup_ui()
             QtCore.QTimer.singleShot(config.PRELOAD_DELAY_MS, self._preload_translation)
-        except Exception as e:
-            print(f"Error during MainMenu setup: {e}")
+        except Exception:
+            log.exception("Error during MainMenu setup")
             self._create_fallback_ui()
 
     # ------------------------------------------------------------------
     # UI setup
     # ------------------------------------------------------------------
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         self.centralwidget = QtWidgets.QWidget(self)
         self.centralwidget.setStyleSheet("background-color:rgb(255,255,255);")
 
@@ -75,7 +78,7 @@ class MainMenuWindow(QtWidgets.QMainWindow):
 
         self.resizeEvent = self._handle_resize
 
-    def _create_fallback_ui(self):
+    def _create_fallback_ui(self) -> None:
         cw = QtWidgets.QWidget(self)
         self.setCentralWidget(cw)
         layout = QtWidgets.QVBoxLayout(cw)
@@ -125,13 +128,13 @@ class MainMenuWindow(QtWidgets.QMainWindow):
     # Resize
     # ------------------------------------------------------------------
 
-    def _handle_resize(self, event):
+    def _handle_resize(self, event) -> None:
         w, h = event.size().width(), event.size().height()
         if hasattr(self, "background_label"):
             self.background_label.setGeometry(QtCore.QRect(0, 0, w, h))
 
-        scale = min(w / 1920, h / 1080)
-        if w < 768:
+        scale = min(w / config.REFERENCE_WIDTH, h / config.REFERENCE_HEIGHT)
+        if w < config.MOBILE_BREAKPOINT:
             scale *= 1.2
 
         btn_w = int(271 * scale)
@@ -158,20 +161,20 @@ class MainMenuWindow(QtWidgets.QMainWindow):
     # Pre-loading
     # ------------------------------------------------------------------
 
-    def _preload_translation(self):
+    def _preload_translation(self) -> None:
         try:
             from ui.translation import TranslationModule
             self._translation_preloaded = TranslationModule()
             self._translation_preloaded.preloaded = True
-        except Exception as e:
-            print(f"Error preloading Translation module: {e}")
+        except Exception:
+            log.exception("Error preloading Translation module")
             self._translation_preloaded = None
 
     # ------------------------------------------------------------------
     # Navigation
     # ------------------------------------------------------------------
 
-    def _open_translation(self):
+    def _open_translation(self) -> None:
         gc.collect()
         try:
             if self._translation_preloaded is not None:
@@ -183,27 +186,27 @@ class MainMenuWindow(QtWidgets.QMainWindow):
                 self.hide()
                 NavigationManager.instance().go_to_translation()
         except Exception as e:
-            print(f"Error opening Translation: {e}")
+            log.exception("Error opening Translation")
             QtWidgets.QMessageBox.critical(self, "Error", str(e))
 
-    def _open_library(self):
+    def _open_library(self) -> None:
         gc.collect()
         try:
             from ui.navigation import NavigationManager
             self.hide()
             NavigationManager.instance().go_to_sign_library()
         except Exception as e:
-            print(f"Error opening Sign Library: {e}")
+            log.exception("Error opening Sign Library")
             QtWidgets.QMessageBox.critical(self, "Error", str(e))
 
-    def _open_guide(self):
+    def _open_guide(self) -> None:
         gc.collect()
         try:
             from ui.navigation import NavigationManager
             self.hide()
             NavigationManager.instance().go_to_user_guide()
         except Exception as e:
-            print(f"Error opening User Guide: {e}")
+            log.exception("Error opening User Guide")
             QtWidgets.QMessageBox.critical(self, "Error", str(e))
 
 

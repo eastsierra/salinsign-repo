@@ -1,7 +1,8 @@
 """
-Sign Language Library – tabbed catalog of signs with search.
+Sign Language Library -- tabbed catalog of signs with search.
 """
 
+import logging
 import sys
 import os
 
@@ -15,6 +16,8 @@ from PyQt5.QtCore import Qt, QSize
 
 import config
 from ui.widgets.catalog import CatalogItem, CustomTabBar
+
+log = logging.getLogger(__name__)
 
 
 class SignLanguageLibrary(QMainWindow):
@@ -365,7 +368,7 @@ class SignLanguageLibrary(QMainWindow):
             self.close()
             NavigationManager.instance().go_to_main_menu()
         except Exception as e:
-            print(f"Error navigating back: {e}")
+            log.exception("Error navigating back")
             self.close()
 
     def resizeEvent(self, event):

@@ -1,7 +1,8 @@
 """
-User Guide module – a 17-slide walkthrough of the application.
+User Guide module -- a 17-slide walkthrough of the application.
 """
 
+import logging
 import sys
 import os
 
@@ -14,11 +15,13 @@ from PyQt5.QtGui import QPixmap, QCursor, QFont
 
 import config
 
+log = logging.getLogger(__name__)
+
 
 class UserGuideModule(QMainWindow):
     """Full-screen slideshow with previous / next navigation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("SalinSign User Guide")
         self.setGeometry(0, 0, *config.WINDOW_SIZE)
@@ -31,15 +34,15 @@ class UserGuideModule(QMainWindow):
         try:
             self._setup_ui()
             self.resizeEvent = self._handle_resize
-        except Exception as e:
-            print(f"Error initializing UserGuide: {e}")
-            self._create_error_ui(str(e))
+        except Exception:
+            log.exception("Error initializing UserGuide")
+            self._create_error_ui("Failed to load the User Guide")
 
     # ------------------------------------------------------------------
     # UI
     # ------------------------------------------------------------------
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         cw = QWidget()
         self.setCentralWidget(cw)
         self.main_layout = QVBoxLayout(cw)
@@ -106,7 +109,7 @@ class UserGuideModule(QMainWindow):
 
         self._update_slide()
 
-    def _create_error_ui(self, message: str):
+    def _create_error_ui(self, message: str) -> None:
         cw = QWidget()
         self.setCentralWidget(cw)
         lo = QVBoxLayout(cw)
@@ -119,7 +122,7 @@ class UserGuideModule(QMainWindow):
     # Slide logic
     # ------------------------------------------------------------------
 
-    def _update_slide(self):
+    def _update_slide(self) -> None:
         path = os.path.join(config.USER_GUIDE_ASSETS_DIR, f"{self.current_slide}.png")
         w = self.width()
         h = self.height() - 200
@@ -134,12 +137,12 @@ class UserGuideModule(QMainWindow):
         self.prev_label.setStyleSheet("opacity:0.5;" if self.current_slide == 1 else "opacity:1;")
         self.next_label.setStyleSheet("opacity:0.5;" if self.current_slide == self.total_slides else "opacity:1;")
 
-    def _next_slide(self, _event):
+    def _next_slide(self, _event) -> None:
         if self.current_slide < self.total_slides:
             self.current_slide += 1
             self._update_slide()
 
-    def _prev_slide(self, _event):
+    def _prev_slide(self, _event) -> None:
         if self.current_slide > 1:
             self.current_slide -= 1
             self._update_slide()
@@ -148,9 +151,9 @@ class UserGuideModule(QMainWindow):
     # Resize
     # ------------------------------------------------------------------
 
-    def _handle_resize(self, event):
+    def _handle_resize(self, event) -> None:
         w = event.size().width()
-        scale = min(w / 1920, 1.0)
+        scale = min(w / config.REFERENCE_WIDTH, 1.0)
         logo_scale = scale * 0.8
 
         self.header_image.setPixmap(
@@ -180,16 +183,16 @@ class UserGuideModule(QMainWindow):
     # Navigation
     # ------------------------------------------------------------------
 
-    def _go_back(self, _event):
+    def _go_back(self, _event) -> None:
         try:
             from ui.navigation import NavigationManager
             self.close()
             NavigationManager.instance().go_to_main_menu()
-        except Exception as e:
-            print(f"Error navigating back: {e}")
+        except Exception:
+            log.exception("Error navigating back")
             self.close()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event) -> None:
         event.accept()
 
 
