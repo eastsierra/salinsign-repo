@@ -2,6 +2,8 @@
 Chat widgets: ChatBubble and MessageItem used in the Translation module.
 """
 
+import logging
+
 from PyQt5.QtWidgets import (
     QApplication, QLabel, QWidget, QHBoxLayout, QVBoxLayout, QSizePolicy, QLayout,
 )
@@ -10,11 +12,13 @@ from PyQt5.QtGui import QFont, QPixmap, QPainter, QColor
 
 import config
 
+log = logging.getLogger(__name__)
+
 
 class ChatBubble(QLabel):
     """A single chat-message bubble with dynamic sizing."""
 
-    def __init__(self, message: str, user_type: str = "Patient", parent=None):
+    def __init__(self, message: str, user_type: str = "Patient", parent=None) -> None:
         super().__init__(parent)
         self.original_message = message
         self.setTextFormat(Qt.RichText)
@@ -50,11 +54,13 @@ class ChatBubble(QLabel):
         self.setWordWrap(True)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
 
-    def _compute_size(self, message: str):
+    def _compute_size(self, message: str) -> None:
         fm = self.fontMetrics()
         words = message.split()
         word_count = len(words)
-        screen_w = QApplication.desktop().screenGeometry().width()
+
+        screen = QApplication.primaryScreen()
+        screen_w = screen.geometry().width() if screen else config.REFERENCE_WIDTH
         max_avail = min(screen_w * 0.8, 800)
 
         if word_count <= 3:
@@ -82,7 +88,7 @@ class ChatBubble(QLabel):
 class MessageItem(QWidget):
     """A full message row: avatar + bubble + timestamp."""
 
-    def __init__(self, message: str, user_type: str = "Patient", parent=None):
+    def __init__(self, message: str, user_type: str = "Patient", parent=None) -> None:
         super().__init__(parent)
         self._layout = QHBoxLayout(self)
         self._layout.setContentsMargins(10, 5, 10, 5)
@@ -119,15 +125,19 @@ class MessageItem(QWidget):
             self._layout.addWidget(self.message_container)
             self._layout.addWidget(self.avatar)
 
-    def _build_avatar(self, user_type: str) -> QLabel:
+    @staticmethod
+    def _build_avatar(user_type: str) -> QLabel:
         label = QLabel()
         avatar_px = QPixmap(50, 50)
         avatar_px.fill(Qt.transparent)
 
         image_path = config.asset(f"{user_type.lower()}.png")
+        painter = QPainter(avatar_px)
         try:
             src = QPixmap(image_path)
-            painter = QPainter(avatar_px)
+            if src.isNull():
+                raise ValueError("Avatar image not found")
+
             painter.setRenderHint(QPainter.Antialiasing)
             painter.setPen(Qt.NoPen)
             painter.setBrush(Qt.white)
@@ -139,10 +149,9 @@ class MessageItem(QWidget):
             sx = (sw - side) // 2
             sy = (sh - side) // 2
             painter.drawPixmap(QRect(0, 0, 50, 50), src, QRect(sx, sy, side, side))
-            painter.end()
         except Exception:
+            log.debug("Using fallback avatar for %s", user_type)
             color = config.CHAT_COLORS["patient_bg"] if user_type == "Patient" else config.CHAT_COLORS["doctor_bg"]
-            painter = QPainter(avatar_px)
             painter.setRenderHint(QPainter.Antialiasing)
             painter.setBrush(QColor(color))
             painter.setPen(Qt.NoPen)
@@ -150,6 +159,7 @@ class MessageItem(QWidget):
             painter.setPen(Qt.white)
             painter.setFont(QFont("Arial", 20, QFont.Bold))
             painter.drawText(avatar_px.rect(), Qt.AlignCenter, user_type[0])
+        finally:
             painter.end()
 
         label.setPixmap(avatar_px)
