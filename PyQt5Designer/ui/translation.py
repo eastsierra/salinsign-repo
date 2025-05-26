@@ -1,11 +1,12 @@
 """
-Translation module – real-time sign language recognition with chat interface.
+Translation module -- real-time sign language recognition with chat interface.
 
 Combines a live camera feed with ML inference, a patient/doctor chat panel,
 sign-language image display, and a medical summary composer.
 """
 
 import gc
+import logging
 import os
 
 import wordninja
@@ -23,11 +24,13 @@ from core.inference import SignLanguageThread
 from ui.widgets.chat import MessageItem
 from ui.widgets.popups import PopupWindow, MedicalSummaryTemplate
 
+log = logging.getLogger(__name__)
+
 
 class TranslationModule(QMainWindow):
     """Full-screen translation interface: camera + chat + sign display."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("SalinSign Translation Module")
         self.setGeometry(0, 0, *config.WINDOW_SIZE)
@@ -47,7 +50,6 @@ class TranslationModule(QMainWindow):
         self._load_stylesheet()
 
         self.sign_language_thread: SignLanguageThread | None = None
-        self.video_thread = None
         self.resizeEvent = self._handle_resize
 
         self.last_recognized_sign = None
@@ -66,7 +68,7 @@ class TranslationModule(QMainWindow):
     # UI setup
     # ------------------------------------------------------------------
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -81,7 +83,7 @@ class TranslationModule(QMainWindow):
         self._build_header()
         self._build_boxes()
 
-    def _build_header(self):
+    def _build_header(self) -> None:
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
 
@@ -115,7 +117,7 @@ class TranslationModule(QMainWindow):
         self.main_layout.addLayout(hdr)
         self.main_layout.addSpacing(5)
 
-    def _build_boxes(self):
+    def _build_boxes(self) -> None:
         self.container = QHBoxLayout()
         self.container.setSpacing(20)
 
@@ -156,7 +158,6 @@ class TranslationModule(QMainWindow):
         self.video_placeholder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.box1_layout.addWidget(self.video_placeholder)
 
-        # Edit mode
         em_row = QHBoxLayout()
         em_row.setContentsMargins(0, 0, 0, 0)
         self.edit_mode_toggle = QCheckBox("Edit Mode")
@@ -176,7 +177,6 @@ class TranslationModule(QMainWindow):
         em_row.addStretch()
         self.box1_layout.addLayout(em_row)
 
-        # Translation box + send
         tx_row = QHBoxLayout()
         self.translation_box = QLineEdit()
         self.translation_box.setReadOnly(True)
@@ -213,7 +213,6 @@ class TranslationModule(QMainWindow):
         self.chat_header.setAlignment(Qt.AlignCenter)
         self.box2_layout.addWidget(self.chat_header)
 
-        # Chat area
         self.chat_container = QWidget()
         self.chat_layout = QVBoxLayout(self.chat_container)
         self.chat_layout.setSpacing(5)
@@ -235,7 +234,6 @@ class TranslationModule(QMainWindow):
         )
         self.box2_layout.addWidget(self.chat_scroll)
 
-        # Sign display (hidden by default)
         self.sign_display_scroll = QScrollArea()
         self.sign_display_scroll.setWidgetResizable(True)
         self.sign_display_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -258,10 +256,8 @@ class TranslationModule(QMainWindow):
         self.sign_display_scroll.hide()
         self.box2_layout.addWidget(self.sign_display_scroll)
 
-        # Predefined phrases
         self._build_phrase_bar()
 
-        # Doctor input row
         input_row = QHBoxLayout()
         self.input_user2 = QLineEdit()
         self.input_user2.setPlaceholderText("Doctor Type here...")
@@ -311,7 +307,7 @@ class TranslationModule(QMainWindow):
         self.container.addWidget(self.box2)
         self.main_layout.addLayout(self.container)
 
-    def _build_phrase_bar(self):
+    def _build_phrase_bar(self) -> None:
         phrases_widget = QWidget()
         phrases_widget.setObjectName("phrasesContainer")
         fl = QHBoxLayout(phrases_widget)
@@ -355,7 +351,7 @@ class TranslationModule(QMainWindow):
         pl.addWidget(scroll)
         self.box2_layout.addLayout(pl)
 
-    def _setup_predictive_text(self):
+    def _setup_predictive_text(self) -> None:
         self.completer = QCompleter(config.DOCTOR_AUTOCOMPLETE_PHRASES)
         self.completer.setCaseSensitivity(Qt.CaseInsensitive)
         self.completer.setCompletionMode(QCompleter.PopupCompletion)
@@ -374,14 +370,14 @@ class TranslationModule(QMainWindow):
     # Stylesheet
     # ------------------------------------------------------------------
 
-    def _load_stylesheet(self):
+    def _load_stylesheet(self) -> None:
         if os.path.exists(config.STYLESHEET_PATH):
-            with open(config.STYLESHEET_PATH, "r") as f:
+            with open(config.STYLESHEET_PATH, "r", encoding="utf-8") as f:
                 self.setStyleSheet(f.read())
         else:
             self._apply_basic_styles()
 
-    def _apply_basic_styles(self):
+    def _apply_basic_styles(self) -> None:
         self.setStyleSheet(
             "QWidget{font-family:Arial,sans-serif;}"
             "#box1,#box2{background-color:#f5f5f5;border-radius:10px;border:1px solid #ddd;}"
@@ -397,7 +393,7 @@ class TranslationModule(QMainWindow):
     # Edit mode / translation controls
     # ------------------------------------------------------------------
 
-    def _toggle_edit_mode(self, state):
+    def _toggle_edit_mode(self, state) -> None:
         self.edit_mode = bool(state)
         if self.edit_mode:
             self.translation_box.setReadOnly(False)
@@ -416,7 +412,7 @@ class TranslationModule(QMainWindow):
             )
             self.translation_send_button.hide()
 
-    def _send_translation(self):
+    def _send_translation(self) -> None:
         text = self.translation_box.text()
         if text:
             self.send_message("Patient", text)
@@ -428,8 +424,8 @@ class TranslationModule(QMainWindow):
     # Chat
     # ------------------------------------------------------------------
 
-    def send_message(self, user: str, message: str):
-        if not message.strip():
+    def send_message(self, user: str, message: str) -> None:
+        if not message or not message.strip():
             return
         self.messages.append({"user": user, "text": message})
         if self.text_mode:
@@ -440,14 +436,14 @@ class TranslationModule(QMainWindow):
         if user == "Doctor":
             if not self.text_mode:
                 self._clear_sign_display()
-                imgs = []
+                imgs: list[str | None] = []
                 for word in message.split():
                     imgs.extend(self._text_to_sign_images(word))
                     imgs.append(None)
                 self._display_sign_images(imgs)
             self.input_user2.clear()
 
-    def _add_message_widget(self, user: str, message: str):
+    def _add_message_widget(self, user: str, message: str) -> None:
         show_sender = True
         if len(self.messages) > 1 and self.messages[-2]["user"] == user:
             show_sender = False
@@ -466,7 +462,7 @@ class TranslationModule(QMainWindow):
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, item)
         QApplication.processEvents()
 
-    def _clear_chat(self):
+    def _clear_chat(self) -> None:
         self.messages.clear()
         while self.chat_layout.count() > 1:
             item = self.chat_layout.takeAt(0)
@@ -476,7 +472,7 @@ class TranslationModule(QMainWindow):
         self.translation_box.clear()
         self.accumulated_chars = ""
 
-    def _refresh_chat_widgets(self):
+    def _refresh_chat_widgets(self) -> None:
         while self.chat_layout.count() > 1:
             item = self.chat_layout.takeAt(0)
             if item.widget():
@@ -492,7 +488,7 @@ class TranslationModule(QMainWindow):
     # ------------------------------------------------------------------
 
     def _text_to_sign_images(self, text: str) -> list[str]:
-        images = []
+        images: list[str] = []
         for ch in text.upper():
             if ch.isalpha() or ch.isdigit():
                 path = os.path.join(config.SIGN_IMAGES_DIR, f"{ch}.png")
@@ -500,7 +496,7 @@ class TranslationModule(QMainWindow):
                     images.append(path)
         return images
 
-    def _clear_sign_display(self):
+    def _clear_sign_display(self) -> None:
         while self.sign_display_layout.count():
             item = self.sign_display_layout.takeAt(0)
             if item.widget():
@@ -512,7 +508,7 @@ class TranslationModule(QMainWindow):
                         sub.widget().deleteLater()
                 QWidget().setLayout(item.layout())
 
-    def _display_sign_images(self, paths: list):
+    def _display_sign_images(self, paths: list) -> None:
         if not paths:
             self._clear_sign_display()
             return
@@ -575,7 +571,7 @@ class TranslationModule(QMainWindow):
             self.sign_display_layout.addLayout(row_layout)
         self.sign_display_layout.addStretch()
 
-    def _toggle_display_mode(self, state):
+    def _toggle_display_mode(self, state) -> None:
         self.text_mode = bool(state)
         self.display_mode_toggle.setText("Text Mode" if self.text_mode else "Sign Mode")
         if self.text_mode:
@@ -589,11 +585,11 @@ class TranslationModule(QMainWindow):
             self.sign_display.setMinimumWidth(self.box2.width() - 50)
             self._update_sign_display_all()
 
-    def _update_sign_display_all(self):
+    def _update_sign_display_all(self) -> None:
         self._clear_sign_display()
         doctor_msgs = [m["text"] for m in self.messages if m["user"] == "Doctor"]
         if doctor_msgs:
-            all_imgs = []
+            all_imgs: list[str | None] = []
             for msg in doctor_msgs:
                 for word in msg.split():
                     all_imgs.extend(self._text_to_sign_images(word))
@@ -606,16 +602,16 @@ class TranslationModule(QMainWindow):
     # Resize
     # ------------------------------------------------------------------
 
-    def _handle_resize(self, event):
+    def _handle_resize(self, event) -> None:
         w, h = event.size().width(), event.size().height()
 
-        if w >= 1920 and h >= 1080:
+        if w >= config.REFERENCE_WIDTH and h >= config.REFERENCE_HEIGHT:
             self.container.setDirection(QHBoxLayout.LeftToRight)
             self.box1.setMinimumWidth(0)
             self.box2.setMinimumWidth(0)
             return
 
-        if w < 768:
+        if w < config.MOBILE_BREAKPOINT:
             self.container.setDirection(QVBoxLayout.TopToBottom)
             self.box1.setMinimumWidth(w - 40)
             self.box2.setMinimumWidth(w - 40)
@@ -630,7 +626,7 @@ class TranslationModule(QMainWindow):
             self.box1_layout.setContentsMargins(20, 20, 20, 20)
             self.box2_layout.setContentsMargins(20, 20, 20, 20)
 
-        scale = min(w / 1920, 1.0)
+        scale = min(w / config.REFERENCE_WIDTH, 1.0)
         logo_s = scale * 0.6
         self.header_image.setPixmap(
             QPixmap(config.asset("Translation.png")).scaledToWidth(int(600 * logo_s), Qt.SmoothTransformation)
@@ -654,7 +650,7 @@ class TranslationModule(QMainWindow):
             "QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical{background:none;}"
         )
         self.send_button2.setMinimumWidth(max(80, int(100 * scale)))
-        vid_h = int(w * 0.75) if w < 768 else int(h * 0.4)
+        vid_h = int(w * 0.75) if w < config.MOBILE_BREAKPOINT else int(h * 0.4)
         self.video_placeholder.setMinimumHeight(vid_h)
         self.chat_scroll.setMinimumHeight(int(h * 0.4))
 
@@ -666,17 +662,17 @@ class TranslationModule(QMainWindow):
     # Video / inference
     # ------------------------------------------------------------------
 
-    def _setup_video_stream(self):
+    def _setup_video_stream(self) -> None:
         self.sign_language_thread = SignLanguageThread(self.current_camera_id)
         self.sign_language_thread.update_frame.connect(self._update_video_frame)
         self.sign_language_thread.update_text.connect(self._handle_recognized_sign)
         self.sign_language_thread.start()
 
-    def _update_video_frame(self, image: QImage):
+    def _update_video_frame(self, image: QImage) -> None:
         scaled = image.scaled(self.video_placeholder.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.video_placeholder.setPixmap(QPixmap.fromImage(scaled))
 
-    def _handle_recognized_sign(self, sign: str):
+    def _handle_recognized_sign(self, sign: str) -> None:
         now = QTime.currentTime().msecsSinceStartOfDay()
         self.last_gesture_time = now
 
@@ -694,7 +690,7 @@ class TranslationModule(QMainWindow):
                 if not self.edit_mode:
                     self.translation_timer.start(config.TRANSLATION_TIMEOUT_MS)
 
-    def _move_translation_to_chat(self):
+    def _move_translation_to_chat(self) -> None:
         if not self.edit_mode:
             text = self.translation_box.text()
             if text:
@@ -708,7 +704,7 @@ class TranslationModule(QMainWindow):
         if not text:
             return ""
         words = wordninja.split(text.lower())
-        result = []
+        result: list[str] = []
         sentence_start = True
         for w in words:
             if sentence_start:
@@ -722,7 +718,7 @@ class TranslationModule(QMainWindow):
                 result[i] = "I"
         return " ".join(result)
 
-    def _camera_selected(self, index: int):
+    def _camera_selected(self, index: int) -> None:
         if index < 0 or index >= len(self.available_cameras) or self._navigating:
             return
         self.camera_switching = True
@@ -733,6 +729,7 @@ class TranslationModule(QMainWindow):
                 try:
                     self.sign_language_thread.set_camera(new_id)
                 except Exception:
+                    log.exception("Error switching camera; restarting inference thread")
                     self.sign_language_thread.stop()
                     self.sign_language_thread.wait(2000)
                     self.sign_language_thread = None
@@ -744,10 +741,10 @@ class TranslationModule(QMainWindow):
     # Popups
     # ------------------------------------------------------------------
 
-    def _show_tooltip(self, _event):
+    def _show_tooltip(self, _event) -> None:
         PopupWindow(self, "first").exec_()
 
-    def _show_medical_summary(self):
+    def _show_medical_summary(self) -> None:
         dlg = MedicalSummaryTemplate(self)
         if dlg.exec_() == QDialog.Accepted and hasattr(dlg, "plain_summary"):
             self.send_message("Doctor", dlg.plain_summary)
@@ -756,7 +753,7 @@ class TranslationModule(QMainWindow):
     # Navigation / lifecycle
     # ------------------------------------------------------------------
 
-    def _go_back(self, _event):
+    def _go_back(self, _event) -> None:
         if self._navigating:
             return
         self._navigating = True
@@ -767,41 +764,47 @@ class TranslationModule(QMainWindow):
             from ui.navigation import NavigationManager
             self.close()
             NavigationManager.instance().go_to_main_menu()
-        except Exception as e:
-            print(f"Error navigating back: {e}")
+        except Exception:
+            log.exception("Error navigating back")
             self.close()
         finally:
             self._navigating = False
 
-    def _stop_threads(self):
+    def _stop_threads(self) -> None:
         if hasattr(self, "translation_timer") and self.translation_timer.isActive():
             self.translation_timer.stop()
 
-        for thread_attr in ("sign_language_thread", "video_thread"):
-            thread = getattr(self, thread_attr, None)
-            if thread is None:
-                continue
-            try:
-                thread.update_frame.disconnect()
-                thread.update_text.disconnect()
-            except Exception:
-                pass
-            thread.running = False
-            thread.stop()
-            for _ in range(10):
-                if not thread.isRunning():
-                    break
-                self._msleep(100)
-            if thread.isRunning():
-                thread.terminate()
-            setattr(self, thread_attr, None)
+        thread = self.sign_language_thread
+        if thread is None:
+            return
 
-    def _msleep(self, ms: int):
+        try:
+            thread.update_frame.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+        try:
+            thread.update_text.disconnect()
+        except (TypeError, RuntimeError):
+            pass
+
+        thread.running = False
+        thread.stop()
+        for _ in range(10):
+            if not thread.isRunning():
+                break
+            self._msleep(100)
+        if thread.isRunning():
+            log.warning("Force-terminating inference thread")
+            thread.terminate()
+        self.sign_language_thread = None
+
+    @staticmethod
+    def _msleep(ms: int) -> None:
         deadline = QTime.currentTime().addMSecs(ms)
         while QTime.currentTime() < deadline:
             QApplication.processEvents(QApplication.ExclusiveUserInputEvents)
 
-    def showEvent(self, event):
+    def showEvent(self, event) -> None:
         super().showEvent(event)
         if not self.preloaded:
             QTimer.singleShot(100, self._setup_video_stream)
@@ -812,7 +815,7 @@ class TranslationModule(QMainWindow):
             )
             QApplication.processEvents()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event) -> None:
         self._stop_threads()
         self.messages.clear()
         if hasattr(self, "translation_box"):
@@ -822,7 +825,7 @@ class TranslationModule(QMainWindow):
         gc.collect()
         event.accept()
 
-    def hideEvent(self, event):
+    def hideEvent(self, event) -> None:
         if not self._navigating:
             self._stop_threads()
             gc.collect()

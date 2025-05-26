@@ -2,6 +2,8 @@
 Popup dialogs: onboarding tutorial flow and medical summary template.
 """
 
+import logging
+
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QGroupBox, QFormLayout,
@@ -10,6 +12,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 
 import config
+
+log = logging.getLogger(__name__)
 
 _GREEN_BTN = (
     "QPushButton{background-color:%s;color:white;border:none;border-radius:5px;"
@@ -29,7 +33,6 @@ _RED_BTN = (
     "QPushButton:hover{background-color:%s;}"
 ) % (config.POPUP_COLORS["red"], config.POPUP_COLORS["red_hover"])
 
-# Tutorial image paths keyed by popup_type
 _TUTORIAL_IMAGES = {
     "first":         config.asset("helpassets/both/welcomepopup.png"),
     "second":        config.asset("helpassets/both/beforepopup.png"),
@@ -46,7 +49,6 @@ _TUTORIAL_IMAGES = {
     "doctor5":       config.asset("helpassets/doctor/doctorpopup5.png"),
 }
 
-# Defines the next popup_type in each tutorial sequence
 _NEXT_POPUP = {
     "first":    "second",
     "patient1": "patient2",
@@ -65,8 +67,12 @@ _NEXT_POPUP = {
 class PopupWindow(QDialog):
     """Generic onboarding / tutorial popup with image content."""
 
-    def __init__(self, parent=None, popup_type: str = "first"):
+    def __init__(self, parent=None, popup_type: str = "first") -> None:
         super().__init__(parent)
+        if popup_type not in _TUTORIAL_IMAGES:
+            log.warning("Unknown popup type '%s', defaulting to 'first'", popup_type)
+            popup_type = "first"
+
         self.popup_type = popup_type
         w, h = config.POPUP_SIZE
         self.setWindowTitle("")
@@ -89,7 +95,7 @@ class PopupWindow(QDialog):
         self._add_buttons(btn_layout)
         layout.addLayout(btn_layout)
 
-    def _add_buttons(self, layout: QHBoxLayout):
+    def _add_buttons(self, layout: QHBoxLayout) -> None:
         if self.popup_type == "first":
             btn = QPushButton("Let's Get Started")
             btn.setStyleSheet(_GREEN_BTN)
@@ -128,25 +134,25 @@ class PopupWindow(QDialog):
             btn.clicked.connect(self.accept)
             layout.addWidget(btn)
 
-    def _advance(self, next_type: str | None):
+    def _advance(self, next_type: str | None) -> None:
         self.accept()
         if next_type:
             PopupWindow(self.parent(), next_type).exec_()
 
-    def _open_user_guide(self):
+    def _open_user_guide(self) -> None:
         self.accept()
         from ui.navigation import NavigationManager
         nav = NavigationManager.instance()
-        for widget in QApplication.topLevelWidgets():
-            if hasattr(widget, "closeEvent") and widget is not self:
-                widget.close()
+        parent = self.parent()
+        if isinstance(parent, QMainWindow):
+            parent.close()
         nav.go_to_user_guide()
 
 
 class MedicalSummaryTemplate(QDialog):
     """Dialog for composing a structured medical summary."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Medical Summary Template")
         self.setMinimumSize(600, 500)
@@ -196,7 +202,7 @@ class MedicalSummaryTemplate(QDialog):
         parent_layout.addWidget(group)
         return edit
 
-    def _generate(self):
+    def _generate(self) -> None:
         symptoms = self.symptoms_edit.toPlainText().strip()
         diagnosis = self.diagnosis_edit.toPlainText().strip()
         prescription = self.prescription_edit.toPlainText().strip()
@@ -247,7 +253,7 @@ class MedicalSummaryTemplate(QDialog):
 
         preview.exec_()
 
-    def _show_error(self, message: str):
+    def _show_error(self, message: str) -> None:
         dlg = QDialog(self)
         dlg.setWindowTitle("Error")
         dlg.setFixedSize(300, 150)
