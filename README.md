@@ -24,8 +24,8 @@ SalinSign is a Filipino Sign Language recognition system specializing for doctor
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/medical-sign-interpreter.git
-   cd medical-sign-interpreter
+   git@github.com:eastsierra/salinsign-repo.git
+   cd salinsign-repo
    ```
 
 2. Install required packages:
@@ -35,7 +35,7 @@ SalinSign is a Filipino Sign Language recognition system specializing for doctor
 
 3. Run the application:
    ```
-   python inference_classifier.py
+   python MainMenu.py
    ```
 
 ## Feature Extraction
