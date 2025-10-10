@@ -24,7 +24,7 @@ SalinSign is a Filipino Sign Language recognition system specializing for doctor
 
 1. Clone this repository:
    ```
-   git@github.com:eastsierra/salinsign-repo.git
+   git@github.com:jossrazo/salinsign-repo.git
    cd salinsign-repo
    ```
 
